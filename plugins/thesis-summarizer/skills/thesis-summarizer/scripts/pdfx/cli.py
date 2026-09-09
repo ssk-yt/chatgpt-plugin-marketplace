@@ -151,6 +151,7 @@ def cmd_verify(a):
     anchors, problems = _resolve_all(doc, spans)
     by_id = {x["id"]: x for x in anchors}
     rows = V.coverage(spans, by_id, doc)
+    media_sheet = V.media_contact_sheet(a.workdir, blocks)
 
     ranked = sorted(rows, key=lambda r: -r["ratio"])
     flagged = [r for r in ranked if r["flag"] == "WIDE"]
@@ -177,6 +178,10 @@ def cmd_verify(a):
         print("legend (id -> claim):")
         for r in target:
             print(f'  {r["id"]}  {r["text"][:60]}')
+    if media_sheet:
+        print(f"\nmedia crop review sheet:\n  {media_sheet}")
+        print("Confirm that every tile contains only the figure or table and its caption; "
+              "body prose, equations, headers, and footers must be absent.")
     return 0
 
 

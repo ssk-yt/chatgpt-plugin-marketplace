@@ -146,8 +146,12 @@ equations remain outside anchors. This is intentional: the entire explanation,
 not only selected phrases, must be clickable back to its PDF evidence.
 
 Media crop coordinates are `page x y width height`, all in page-relative
-percentages. Inspect the rendered page image and crop the complete figure or
-table without surrounding body text. The caption must be fully wrapped in one
+percentages. A crop must contain **only the complete figure or table and its
+original caption**. Exclude surrounding body prose, equations, running headers,
+footers, page numbers, and neighboring media. Find the whitespace boundary
+immediately before and after the media, then leave only a small visual margin;
+do not use a broad page crop as a shortcut. Crops taller than 92% of a page are
+rejected as probable page captures. The caption must be fully wrapped in one
 or more source anchors so selecting it opens the exact original caption on the
 PDF page. Place each media block immediately after the explanation that first
 needs it. Use `figure` for any ordinary figure, `table` for any standalone
@@ -216,6 +220,12 @@ pdfx find work/ "some candidate phrase"
 ```bash
 pdfx verify work/ --flagged-only
 ```
+
+Verification also writes `work/out/media_crops.png`. Open that sheet and inspect
+every tile at readable size. If any tile contains body text or an equation from
+outside the figure/table, tighten its `@crop` coordinates, rebuild, and verify
+again. Delivery is not complete until every media tile contains only the
+figure/table and its caption.
 
 This compares what each span *claims* against the text its highlight actually
 *covers*, calibrated against the document's own median, and tiles the

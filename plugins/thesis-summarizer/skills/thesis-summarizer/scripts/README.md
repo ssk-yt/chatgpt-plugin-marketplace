@@ -40,7 +40,9 @@ The TeX-like subset supports fractions, square roots, subscripts, superscripts,
 Greek letters, and common operators. It is rendered to MathML locally, so the
 generated HTML remains self-contained and does not load a CDN.
 
-PDF page crops use page-relative percentages and are embedded into the output:
+PDF page crops use page-relative percentages and are embedded into the output.
+Each crop must contain only the figure or table and its caption, without body
+prose, equations, headers, footers, or neighboring media:
 
     :::media figure
     @crop p3 10 18 80 34
@@ -51,6 +53,10 @@ Use `:::media table` for a single tall table and `:::media compare` with exactly
 two `@crop` items for a side-by-side comparison. Figures default to 80% width,
 tall tables to 60%, and both expand responsively on mobile. Every caption must
 contain a source anchor.
+
+`pdfx verify` writes `out/media_crops.png`, a contact sheet of all authored
+crops. Inspect every tile and tighten `@crop` coordinates until only the media
+and caption remain. Nearly full-page crops are rejected.
 
 At mobile widths, the explanation and PDF panes form a native horizontal
 scroll-snap carousel. Swiping, selecting a tab, or following a bidirectional

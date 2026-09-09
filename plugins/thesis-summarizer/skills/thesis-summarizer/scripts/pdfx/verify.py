@@ -132,3 +132,63 @@ def contact_sheets(workdir: str, rows: list[dict], per_sheet: int = 8,
         sheet.save(p)
         out.append(p)
     return out
+
+
+def media_contact_sheet(workdir: str, blocks, cols: int = 2) -> Path | None:
+    """Tile every authored media crop for mandatory visual boundary review."""
+    from PIL import Image, ImageDraw
+
+    wd = Path(workdir)
+    tiles = []
+    for block in blocks:
+        for item in block.media:
+            page_path = wd / "pages" / f"p{item.page + 1:02d}.png"
+            with Image.open(page_path) as page:
+                page = page.convert("RGB")
+                width, height = page.size
+                x, y, crop_width, crop_height = item.crop
+                box = (
+                    round(width * x / 100),
+                    round(height * y / 100),
+                    round(width * (x + crop_width) / 100),
+                    round(height * (y + crop_height) / 100),
+                )
+                crop = page.crop(box)
+            label = (
+                f"content.md:{item.line} p{item.page + 1} "
+                f"({x:g}, {y:g}, {crop_width:g}, {crop_height:g})"
+            )
+            tiles.append((label, crop))
+
+    if not tiles:
+        return None
+
+    tile_width, tile_height = 900, 620
+    padding, header = 12, 26
+    row_count = (len(tiles) + cols - 1) // cols
+    sheet = Image.new(
+        "RGB",
+        (cols * tile_width + (cols + 1) * padding,
+         row_count * (tile_height + header) + (row_count + 1) * padding),
+        (248, 247, 243),
+    )
+    draw = ImageDraw.Draw(sheet)
+    for index, (label, crop) in enumerate(tiles):
+        column, row = index % cols, index // cols
+        left = padding + column * (tile_width + padding)
+        top = padding + row * (tile_height + header + padding)
+        draw.text((left, top + 5), label, fill=(35, 35, 35))
+        crop.thumbnail((tile_width, tile_height))
+        image_left = left + (tile_width - crop.width) // 2
+        image_top = top + header
+        sheet.paste(crop, (image_left, image_top))
+        draw.rectangle(
+            (image_left, image_top, image_left + crop.width - 1, image_top + crop.height - 1),
+            outline=(190, 65, 45),
+            width=2,
+        )
+
+    output = wd / "out" / "media_crops.png"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(output)
+    return output

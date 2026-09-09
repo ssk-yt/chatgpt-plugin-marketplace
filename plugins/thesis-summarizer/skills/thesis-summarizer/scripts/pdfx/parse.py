@@ -29,6 +29,7 @@ from .mathml import render_inline_math
 SPAN_RE = re.compile(r"\{\{\s*p(\d+)(?:#(\d+))?\s*\|(.+?)\|(.+?)\}\}", re.S)
 PHRASE_SEP = ";;"
 NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)"
+MAX_MEDIA_CROP_HEIGHT = 92.0
 CROP_RE = re.compile(
     rf"^@crop\s+p(\d+)\s+({NUMBER})\s+({NUMBER})\s+({NUMBER})\s+({NUMBER})\s*$"
 )
@@ -230,6 +231,11 @@ def _media_block(lines: list[str], body_line: int, layout: str, expand) -> Block
                     or x + width > 100 or y + height > 100):
                 raise ParseError(
                     f"content.md:{line}: crop must be x y width height percentages inside the page"
+                )
+            if height > MAX_MEDIA_CROP_HEIGHT:
+                raise ParseError(
+                    f"content.md:{line}: crop height {height:g}% looks like a page capture; "
+                    "crop tightly to the figure or table plus its caption, excluding body text"
                 )
             current = (page, crop, line)
         else:

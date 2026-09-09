@@ -7,6 +7,7 @@ from PIL import Image
 from pdfx.mathml import render_inline_math, render_math
 from pdfx.parse import ParseError, parse
 from pdfx.render import ASSETS, body_html
+from pdfx.verify import media_contact_sheet
 
 
 class MathRenderingTests(unittest.TestCase):
@@ -65,6 +66,15 @@ class MediaTests(unittest.TestCase):
                 ":::"
             )
 
+    def test_nearly_full_page_crop_is_rejected(self):
+        with self.assertRaisesRegex(ParseError, "looks like a page capture"):
+            parse(
+                ":::media figure\n"
+                "@crop p1 2 2 96 95\n"
+                "{{p1|Figure 1. Structure.|図1　構造図}}\n"
+                ":::"
+            )
+
     def test_caption_must_link_to_cropped_page(self):
         with self.assertRaises(ParseError):
             parse(
@@ -89,6 +99,21 @@ class MediaTests(unittest.TestCase):
         self.assertIn('class="media-card media-table"', rendered)
         self.assertIn("data:image/png;base64,", rendered)
         self.assertIn('href="#source-a001-1"', rendered)
+
+    def test_media_review_sheet_is_generated(self):
+        blocks, _ = parse(
+            ":::media figure\n"
+            "@crop p1 10 20 80 50\n"
+            "{{p1|Figure 1. Structure.|図1　構造図}}\n"
+            ":::"
+        )
+        with TemporaryDirectory() as directory:
+            pages = Path(directory) / "pages"
+            pages.mkdir()
+            Image.new("RGB", (200, 300), "white").save(pages / "p01.png")
+            output = media_contact_sheet(directory, blocks)
+            self.assertIsNotNone(output)
+            self.assertTrue(output.exists())
 
 
 class MobileViewerTests(unittest.TestCase):
