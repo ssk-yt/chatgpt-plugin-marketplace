@@ -1,0 +1,31 @@
+.DS_Store
+.history/
+__pycache__/
+*.py[cod]
+
+# Local environments and caches
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Generated or source documents must not be committed
+*.pdf
+*.html
+*.htm
+out/
+output/
+outputs/
+work/
+tmp/
+
+# Credentials and private keys
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*

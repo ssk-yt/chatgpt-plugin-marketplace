@@ -1,0 +1,28 @@
+{
+  "name": "thesis-summarizer",
+  "version": "0.2.3",
+  "description": "Turn theses and research papers into self-contained, bidirectionally linked explainers.",
+  "author": {
+    "name": "Local developer"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Thesis Summarizer",
+    "shortDescription": "Turn a thesis or paper into a linked explainer.",
+    "longDescription": "Creates a self-contained HTML summary that links prose, equations, figure captions, and table captions to exact PDF evidence, with embedded source crops and mobile-friendly reading tabs.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "PDF analysis",
+      "Figure and table extraction",
+      "Interactive HTML",
+      "Mobile layout"
+    ],
+    "brandColor": "#A64632",
+    "defaultPrompt": [
+      "このPDFを研究者向けの詳細な日本語解説にして。背景知識、重要な式の導出、関連する図表も含めて。",
+      "この論文を原文への双方向リンク付きで専門的に解説して。",
+      "このPDFからPCとスマホで読める研究者向け解説HTMLを作って。"
+    ]
+  }
+}
