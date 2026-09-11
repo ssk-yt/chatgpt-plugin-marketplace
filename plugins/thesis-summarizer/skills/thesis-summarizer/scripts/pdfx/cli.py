@@ -22,12 +22,18 @@ def cmd_init(a):
 
 def cmd_text(a):
     from .extract import load_meta
+    from .sources import load_index, units_for_page
     meta = load_meta(a.workdir)
+    index = load_index(a.workdir)
     pages = [a.page] if a.page else range(1, meta["pages"] + 1)
     for p in pages:
         t = (Path(a.workdir) / "text" / f"p{p:02d}.txt").read_text(encoding="utf-8")
         print(f"===== page {p} ({len(t)} chars) =====")
-        print(t)
+        if a.raw:
+            print(t)
+        else:
+            for unit in units_for_page(index, p - 1):
+                print(f'[{unit["id"]}] {unit["text"]}')
     return 0
 
 
@@ -56,6 +62,13 @@ def cmd_find(a):
 def _resolve_all(doc, spans):
     anchors, problems = [], []
     for sp in spans:
+        if sp.source_id:
+            rects, error = doc.resolve_source_id(sp.source_id)
+            if error:
+                problems.append(("SOURCE", sp, error))
+                rects = []
+            anchors.append({"id": sp.id, "page": sp.page, "rects": rects})
+            continue
         rects, misses = doc.resolve(sp.page, sp.phrases, sp.occ)
         for ph in misses:
             problems.append(("MISS", sp, ph))
@@ -105,21 +118,24 @@ def cmd_build(a):
 
     anchors, problems = _resolve_all(doc, spans)
 
-    misses = [p for p in problems if p[0] == "MISS"]
+    misses = [p for p in problems if p[0] in {"MISS", "SOURCE"}]
     ambig = [p for p in problems if p[0] == "AMBIG"]
 
     for kind, sp, detail in ambig:
         print(_c(f"AMBIG content.md:{sp.line} [{sp.id}] p{sp.page+1}", "33"), detail)
-    for kind, sp, ph in misses:
-        print(_c(f"MISS  content.md:{sp.line} [{sp.id}] p{sp.page+1}", "31"), repr(ph))
-        for s in doc.suggest(sp.page, ph):
-            print(f"      nearest: {s}")
+    for kind, sp, detail in misses:
+        label = "SOURCE" if kind == "SOURCE" else "MISS"
+        print(_c(f"{label:6s} content.md:{sp.line} [{sp.id}] p{sp.page+1}", "31"),
+              repr(detail))
+        if kind == "MISS":
+            for s in doc.suggest(sp.page, detail):
+                print(f"      nearest: {s}")
 
     if misses and not a.allow_missing:
-        print(_c(f"\n{len(misses)} phrase(s) did not match the page text layer. "
+        print(_c(f"\n{len(misses)} source anchor(s) could not be resolved. "
                  f"Fix them in content.md and rebuild.", "31"))
-        print("Extraction noise (ligatures, soft hyphens, OCR artefacts) is the usual cause: "
-              "quote a shorter fragment, or copy the exact bytes shown above.")
+        print("For source IDs, use an ID printed by pdfx text. For legacy phrases, "
+              "quote a shorter exact fragment from pdfx text --raw.")
         return 1
 
     pages_used = None
@@ -129,7 +145,8 @@ def cmd_build(a):
     out = render.write(a.workdir, blocks, anchors, title=a.title,
                        pages_used=pages_used)
     (wd / "out" / "anchors.json").write_text(
-        json.dumps([{**an, "text": sp.text, "phrases": sp.phrases, "line": sp.line}
+        json.dumps([{**an, "text": sp.text, "source_id": sp.source_id,
+                     "phrases": sp.phrases, "line": sp.line}
                     for an, sp in zip(anchors, spans)], ensure_ascii=False, indent=1),
         encoding="utf-8")
     kb = out.stat().st_size / 1024
@@ -200,6 +217,8 @@ def main(argv=None):
     q = sub.add_parser("text", help="print the extracted text layer")
     q.add_argument("workdir")
     q.add_argument("-p", "--page", type=int)
+    q.add_argument("--raw", action="store_true",
+                   help="print raw text without coordinate-addressable source IDs")
     q.set_defaults(fn=cmd_text)
 
     q = sub.add_parser("find", help="probe one phrase against the text layer")

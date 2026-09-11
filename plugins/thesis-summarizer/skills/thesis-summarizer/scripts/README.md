@@ -8,7 +8,7 @@ not an estimate.
     pip install pypdfium2 pillow      # pypdfium2 is Apache-2.0/BSD; avoid AGPL PyMuPDF
 
     pdfx init paper.pdf -o work/      # extract text, cache page images
-    pdfx text work/                   # read the text layer (quote from THIS)
+    pdfx text work/                   # read all indexed source units
     pdfx build work/                  # content.md -> work/out/explainer.html
     pdfx verify work/                 # coverage heuristics + contact sheets
     pdfx find work/ "some phrase"     # probe one phrase, with near-miss hints
@@ -33,8 +33,14 @@ box titles, punctuation, and layout-only HTML are exempt. Both `build` and
 `verify` report `UNLINKED` and stop when words or numbers remain outside an
 anchor.
 
-    {{p1|verbatim source phrase|リンクされた本文。数式 \(E_0\) も使用できる}}
-    = {{p1|verbatim source equation|E_0 = \frac{1}{2}kQ_R^2}}
+    {{s1.3|リンクされた本文。数式 \(E_0\) も使用できる}}
+    = {{s1.4|E_0 = \frac{1}{2}kQ_R^2}}
+
+`pdfx init` writes `sources.json`, and `pdfx text` prints its short source IDs.
+Each ID stores one exact PDF character range and resolves directly to its PDF
+coordinates without phrase search. One ID may be used by exactly one explanation
+span. `pdfx text --raw` and the older `{{p1|phrase|text}}` syntax remain available
+as a compatibility fallback.
 
 The TeX-like subset supports fractions, square roots, subscripts, superscripts,
 Greek letters, and common operators. It is rendered to MathML locally, so the

@@ -7,4 +7,4 @@ Layout of a work directory:
     content.md     the authoring file YOU write
     out/           explainer.html, contact sheets
 """
-__version__ = "0.2.4"
+__version__ = "0.3.0"

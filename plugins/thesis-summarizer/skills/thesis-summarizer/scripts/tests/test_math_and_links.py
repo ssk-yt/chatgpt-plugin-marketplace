@@ -7,6 +7,7 @@ from PIL import Image
 from pdfx.mathml import render_inline_math, render_math
 from pdfx.parse import ParseError, parse
 from pdfx.render import ASSETS, body_html
+from pdfx.sources import page_units
 from pdfx.verify import media_contact_sheet
 
 
@@ -25,6 +26,17 @@ class MathRenderingTests(unittest.TestCase):
 
 
 class LinkCoverageTests(unittest.TestCase):
+    def test_source_id_links_one_span_to_one_page_location(self):
+        blocks, spans = parse("{{s3.12|座標付きIDでリンクする}}。")
+        self.assertEqual(blocks[0].link_gaps, [])
+        self.assertEqual(spans[0].source_id, "s3.12")
+        self.assertEqual(spans[0].page, 2)
+        self.assertEqual(spans[0].phrases, [])
+
+    def test_source_id_cannot_be_reused(self):
+        with self.assertRaisesRegex(ParseError, "source ID 's1.1' is reused"):
+            parse("{{s1.1|主張A}}。{{s1.1|主張B}}。")
+
     def test_fully_linked_prose_has_no_gap(self):
         blocks, _ = parse("{{p1|source phrase|全文をリンクする}}。")
         self.assertEqual(blocks[0].link_gaps, [])
@@ -38,6 +50,12 @@ class LinkCoverageTests(unittest.TestCase):
         self.assertEqual(blocks[0].link_gaps, [])
         self.assertIn("<mfrac>", blocks[0].html)
         self.assertIn('<a class="a"', blocks[0].html)
+
+    def test_source_id_equation_is_mathml_and_has_no_gap(self):
+        blocks, spans = parse(r"= {{s1.2|E_0 = \frac{1}{2}kQ^2}}")
+        self.assertEqual(blocks[0].link_gaps, [])
+        self.assertEqual(spans[0].source_id, "s1.2")
+        self.assertIn("<mfrac>", blocks[0].html)
 
     def test_unlinked_equation_is_reported(self):
         blocks, _ = parse(r"= E_0 = \frac{1}{2}kQ^2")
@@ -114,6 +132,24 @@ class MediaTests(unittest.TestCase):
             output = media_contact_sheet(directory, blocks)
             self.assertIsNotNone(output)
             self.assertTrue(output.exists())
+
+
+class SourceIndexTests(unittest.TestCase):
+    def test_units_preserve_exact_text_offsets(self):
+        text = "  First source line.\r\nSecond source line.\n\nThird.  "
+        units = page_units(text, 1)
+        self.assertEqual([unit["id"] for unit in units], ["s2.1", "s2.2", "s2.3"])
+        for unit in units:
+            self.assertEqual(
+                text[unit["start"]:unit["start"] + unit["count"]],
+                unit["text"],
+            )
+
+    def test_unusually_long_line_is_split_into_short_units(self):
+        text = " ".join(["evidence"] * 80)
+        units = page_units(text, 0)
+        self.assertGreater(len(units), 1)
+        self.assertTrue(all(len(unit["text"]) <= 120 for unit in units))
 
 
 class MobileViewerTests(unittest.TestCase):

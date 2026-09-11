@@ -10,9 +10,8 @@ SKELETON = """\
 
 ## 1. 最初の節
 
-ここに解説を書く。原文に紐づけたい語句は {{p1|verbatim source phrase|表示される日本語}} と書く。
-複数フレーズを一つのハイライトにまとめるときは {{p1|phrase A ;; phrase B|日本語}}。
-同じフレーズが同一ページに複数あるときは {{p2#2|phrase|日本語}} のように出現番号を指定する。
+ここに解説を書く。原文ID `s1.1` に紐づける語句は {{s1.1|表示される日本語}} と書く。
+1つの解説spanには1つの原文IDだけを使い、複数根拠は短い主張へ分割する。
 
 :::note 補足のタイトル
 枠の中は HTML をそのまま書ける。<b>強調</b> や <dl>/<ol> も使える。
@@ -36,12 +35,15 @@ def init(pdf_path: str, workdir: str, dpi: int = 165, force: bool = False) -> di
     pdf = pdfium.PdfDocument(pdf_path)
     n = len(pdf)
     sizes = []
+    page_texts = []
     for i in range(n):
         page = pdf[i]
         sizes.append(list(page.get_size()))
 
         tp = page.get_textpage()
-        (wd / "text" / f"p{i+1:02d}.txt").write_text(tp.get_text_range(), encoding="utf-8")
+        text = tp.get_text_range()
+        page_texts.append(text)
+        (wd / "text" / f"p{i+1:02d}.txt").write_text(text, encoding="utf-8")
         tp.close()
 
         img = wd / "pages" / f"p{i+1:02d}.png"
@@ -55,6 +57,9 @@ def init(pdf_path: str, workdir: str, dpi: int = 165, force: bool = False) -> di
         "sizes": sizes,
     }
     (wd / "pdfx.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+
+    from .sources import write_index
+    write_index(wd, page_texts)
 
     content = wd / "content.md"
     if not content.exists():

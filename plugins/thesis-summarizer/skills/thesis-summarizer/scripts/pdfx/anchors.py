@@ -8,6 +8,7 @@ import difflib, re
 from pathlib import Path
 
 from .extract import load_meta
+from .sources import load_index
 
 
 class Doc:
@@ -19,6 +20,8 @@ class Doc:
         self.pdf = pdfium.PdfDocument(self.meta["pdf"])
         self.n_pages = self.meta["pages"]
         self.sizes = self.meta["sizes"]
+        self.source_index = load_index(workdir)
+        self.source_units = {unit["id"]: unit for unit in self.source_index.get("units", [])}
 
     # ---------- text ----------
     def text(self, page0: int) -> str:
@@ -66,6 +69,31 @@ class Doc:
             else:
                 misses.append(ph)
         return merge_line_rects(all_rects), misses
+
+    def resolve_source_id(self, source_id: str):
+        """Resolve a saved source unit directly from its PDF character range."""
+        unit = self.source_units.get(source_id)
+        if unit is None:
+            return None, f"unknown source ID {source_id!r}; rerun pdfx text and use a listed ID"
+        page0 = unit["page"]
+        page = self.pdf[page0]
+        width, height = self.sizes[page0]
+        textpage = page.get_textpage()
+        actual = textpage.get_text_range(unit["start"], unit["count"])
+        if actual != unit["text"]:
+            textpage.close()
+            return None, f"stale source ID {source_id!r}; rerun pdfx init"
+        rects = []
+        for index in range(textpage.count_rects(unit["start"], unit["count"])):
+            left, bottom, right, top = textpage.get_rect(index)
+            rects.append((
+                round(left / width * 100, 2),
+                round((height - top) / height * 100, 2),
+                round((right - left) / width * 100, 2),
+                round((top - bottom) / height * 100, 2),
+            ))
+        textpage.close()
+        return merge_line_rects(rects), None
 
 
     def highlighted_text(self, page0: int, rects) -> str:

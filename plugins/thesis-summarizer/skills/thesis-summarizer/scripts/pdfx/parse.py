@@ -13,9 +13,9 @@ Authoring syntax
                              linked equation block
     blank line               paragraph break
 
-    {{p3|phrase|表示テキスト}}                one span, one source phrase
-    {{p3|phrase A ;; phrase B|表示テキスト}}   one span, union of two phrases
-    {{p3#2|phrase|表示テキスト}}              second occurrence on that page
+    {{s3.12|表示テキスト}}                    preferred: one saved source unit
+    {{p3|phrase|表示テキスト}}                legacy: one source phrase
+    {{p3#2|phrase|表示テキスト}}              legacy: second occurrence
 
 Anchor ids are generated automatically (a001, a002, …) so there is no id
 bookkeeping to get wrong.
@@ -26,7 +26,12 @@ from dataclasses import dataclass, field
 
 from .mathml import render_inline_math
 
-SPAN_RE = re.compile(r"\{\{\s*p(\d+)(?:#(\d+))?\s*\|(.+?)\|(.+?)\}\}", re.S)
+ID_SPAN_RE = re.compile(r"\{\{\s*(s(\d+)\.(\d+))\s*\|(.+?)\}\}", re.S)
+LEGACY_SPAN_RE = re.compile(r"\{\{\s*p(\d+)(?:#(\d+))?\s*\|(.+?)\|(.+?)\}\}", re.S)
+SPAN_RE = re.compile(
+    r"\{\{\s*(?:s\d+\.\d+\s*\|.+?|p\d+(?:#\d+)?\s*\|.+?\|.+?)\}\}",
+    re.S,
+)
 PHRASE_SEP = ";;"
 NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)"
 MAX_MEDIA_CROP_HEIGHT = 92.0
@@ -43,6 +48,7 @@ class Span:
     phrases: list[str]
     text: str          # visible (usually Japanese) text
     line: int          # source line in content.md, for error messages
+    source_id: str | None = None
 
 
 @dataclass
@@ -81,15 +87,29 @@ def parse(src: str) -> tuple[list[Block], list[Span]]:
             out.append(render_inline_math(text[position:m.start()]))
             counter[0] += 1
             aid = f"a{counter[0]:03d}"
-            page = int(m.group(1)) - 1
-            occ = int(m.group(2) or 1) - 1
-            phrases = [p.strip() for p in m.group(3).split(PHRASE_SEP) if p.strip()]
-            visible = m.group(4).strip()
+            token = m.group(0)
+            id_match = ID_SPAN_RE.fullmatch(token)
+            legacy_match = LEGACY_SPAN_RE.fullmatch(token)
+            if id_match:
+                source_id = id_match.group(1)
+                page = int(id_match.group(2)) - 1
+                occ = 0
+                phrases = []
+                visible = id_match.group(4).strip()
+            elif legacy_match:
+                source_id = None
+                page = int(legacy_match.group(1)) - 1
+                occ = int(legacy_match.group(2) or 1) - 1
+                phrases = [p.strip() for p in legacy_match.group(3).split(PHRASE_SEP)
+                           if p.strip()]
+                visible = legacy_match.group(4).strip()
+            else:
+                raise ParseError(f"content.md:{line}: invalid source anchor {token[:60]}")
             if page < 0:
                 raise ParseError(f"content.md:{line}: page numbers are 1-based")
-            if not phrases:
+            if source_id is None and not phrases:
                 raise ParseError(f"content.md:{line}: empty source phrase in {m.group(0)[:60]}")
-            sp = Span(aid, page, occ, phrases, visible, line)
+            sp = Span(aid, page, occ, phrases, visible, line, source_id)
             spans.append(sp)
             all_spans.append(sp)
             # Real anchors keep the bidirectional link usable in HTML previews
@@ -180,6 +200,16 @@ def parse(src: str) -> tuple[list[Block], list[Span]]:
         i += 1
 
     flush()
+    seen_source_ids = set()
+    for span in all_spans:
+        if span.source_id is None:
+            continue
+        if span.source_id in seen_source_ids:
+            raise ParseError(
+                f"content.md:{span.line}: source ID {span.source_id!r} is reused; "
+                "one source ID must map to exactly one explanation span"
+            )
+        seen_source_ids.add(span.source_id)
     return blocks, all_spans
 
 
@@ -255,11 +285,15 @@ def _eq_lines(text: str) -> str:
     for ln in text.split("\n"):
         if ln.strip().startswith("= "):
             expression = ln.strip()[2:].strip()
-            match = SPAN_RE.fullmatch(expression)
-            if match:
-                selector = f"p{match.group(1)}" + (f"#{match.group(2)}" if match.group(2) else "")
-                expression = (f"{{{{{selector}|{match.group(3)}|"
-                              f"\\({match.group(4).strip()}\\)}}}}")
+            id_match = ID_SPAN_RE.fullmatch(expression)
+            legacy_match = LEGACY_SPAN_RE.fullmatch(expression)
+            if id_match:
+                expression = f"{{{{{id_match.group(1)}|\\({id_match.group(4).strip()}\\)}}}}"
+            elif legacy_match:
+                selector = (f"p{legacy_match.group(1)}" +
+                            (f"#{legacy_match.group(2)}" if legacy_match.group(2) else ""))
+                expression = (f"{{{{{selector}|{legacy_match.group(3)}|"
+                              f"\\({legacy_match.group(4).strip()}\\)}}}}")
             else:
                 expression = f"\\({expression}\\)"
             out.append(f'<div class="eq">{expression}</div>')
