@@ -44,10 +44,18 @@ That launcher needs no `PYTHONPATH` and no working directory of its own, so one
 spelling works in bash, zsh, PowerShell, and cmd. Do not compose shell-specific
 environment prefixes; they differ between POSIX shells and PowerShell.
 
-If `pypdfium2` or Pillow is missing, install them for the current user with
-`<PY> -m pip install --user pypdfium2 pillow`, or into a task-local directory
-that you add to `PYTHONPATH`. Ask for network permission when required; do not
-install system-wide.
+`pdfx` needs `pypdfium2` and Pillow. If either is missing:
+
+- **In a hosted sandbox** (claude.ai or Claude Desktop chat), the container is
+  disposable and yours alone, so install them directly:
+  `<PY> -m pip install pypdfium2 pillow`. If that fails because the sandbox has
+  no network, stop and tell the user that this skill needs package installs
+  enabled; network access is off by default on Team and Enterprise plans and an
+  organization owner has to turn it on. Do not try to reimplement PDF parsing.
+- **On the user's own machine** (Claude Code), install for the current user with
+  `<PY> -m pip install --user pypdfium2 pillow`, or into a task-local directory
+  that you add to `PYTHONPATH`. Ask for network permission when required; do not
+  install system-wide.
 
 ## Workflow
 
