@@ -233,5 +233,50 @@ class CrossPlatformEntryPointTests(unittest.TestCase):
         self.assertIn("日本語", out)
 
 
+class FramedHostTests(unittest.TestCase):
+    """The explainer is read inside the sandboxed iframes of Claude Desktop and
+    chatgpt.app, where the document is about:srcdoc: replaceState throws
+    SecurityError, and a fragment link that escapes is treated as navigating
+    away from the reply rather than moving within the document.
+    """
+
+    def setUp(self):
+        self.js = (ASSETS / "explainer.js").read_text(encoding="utf-8")
+        self.lines = self.js.splitlines()
+
+    def _block_after(self, needle, span):
+        start = next(i for i, line in enumerate(self.lines) if needle in line)
+        return " ".join(self.lines[start:start + span])
+
+    def test_history_is_only_touched_inside_the_guarded_helper(self):
+        self.assertEqual(self.js.count("history.replaceState"), 1)
+        helper = self._block_after("function setHash(", 6)
+        self.assertIn("history.replaceState", helper)
+        self.assertIn("try{", helper)
+        self.assertIn("catch(err)", helper)
+
+    def test_every_hash_update_goes_through_the_helper(self):
+        self.assertIn("setHash(hit.getAttribute('href'))", self.js)
+        self.assertIn("setHash(link.getAttribute('href'))", self.js)
+        self.assertNotIn("history.replaceState(null,'',hit", self.js)
+        self.assertNotIn("history.replaceState(null,'',link", self.js)
+
+    def test_fragment_links_are_cancelled_in_the_capture_phase(self):
+        guard = next(line for line in self.lines if 'a[href^="#"]' in line)
+        self.assertIn("preventDefault()", guard)
+        self.assertIn("},true);", self.js)
+
+    def test_media_jump_cancels_before_it_can_bail_out(self):
+        handler = self.js.split("mediaJumps.forEach(")[1].split("});")[0]
+        cancel = handler.index("event.preventDefault()")
+        bail = handler.index("if(!anchor)return")
+        self.assertLess(cancel, bail, "an unresolved media jump escapes to the host")
+
+    def test_startup_tolerates_a_hash_the_host_left_behind(self):
+        line = next(l for l in self.lines if "document.querySelector(location.hash)" in l)
+        self.assertIn("try{", line)
+        self.assertIn("catch(err)", line)
+
+
 if __name__ == "__main__":
     unittest.main()

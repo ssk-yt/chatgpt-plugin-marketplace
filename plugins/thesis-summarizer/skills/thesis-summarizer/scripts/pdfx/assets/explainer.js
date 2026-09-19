@@ -23,9 +23,19 @@
     layout.dataset.mobilePane=pane;
     mobileTabs.forEach(tab=>tab.classList.toggle('active',tab.dataset.mobileView===pane));
   }
+  // The explainer is delivered as a standalone file, but it is also read inside
+  // the sandboxed iframes that Claude Desktop and chatgpt.app render replies in.
+  // There the document is about:srcdoc and replaceState throws SecurityError,
+  // which used to abort the click handler before it scrolled anywhere. The hash
+  // is a convenience for the standalone file, never a precondition for moving.
+  function setHash(value){
+    if(!value)return;
+    try{
+      if(location.hash!==value)history.replaceState(null,'',value);
+    }catch(err){/* sandboxed document: in-page navigation still runs below */}
+  }
   function replacePaneHash(pane){
-    const target=pane==='pdf'?'#pdf-pane':'#article-pane';
-    if(location.hash!==target)history.replaceState(null,'',target);
+    setHash(pane==='pdf'?'#pdf-pane':'#article-pane');
   }
   function showMobilePane(pane,animate=true,updateHash=true){
     setMobileState(pane);
@@ -83,7 +93,7 @@
         hit.addEventListener('click',event=>{
           event.preventDefault();
           togglePinnedProse(anchor.id);
-          history.replaceState(null,'',hit.getAttribute('href'));
+          setHash(hit.getAttribute('href'));
           const prose=proseLinks.find(link=>link.dataset.anchor===anchor.id);
           if(!prose)return;
           if(isMobile()){
@@ -108,7 +118,7 @@
       const anchor=byId[link.dataset.anchor];
       if(!anchor)return;
       selectPdf(anchor.id);
-      history.replaceState(null,'',link.getAttribute('href'));
+      setHash(link.getAttribute('href'));
       if(isMobile()){
         showMobilePane('pdf',true,false);
         requestAnimationFrame(()=>focusPdf(anchor));
@@ -122,11 +132,11 @@
   });
   mediaJumps.forEach(link=>{
     link.addEventListener('click',event=>{
+      event.preventDefault();
       const anchor=byId[link.dataset.anchor];
       if(!anchor)return;
-      event.preventDefault();
       selectPdf(anchor.id);
-      history.replaceState(null,'',link.getAttribute('href'));
+      setHash(link.getAttribute('href'));
       if(isMobile()){
         showMobilePane('pdf',true,false);
         requestAnimationFrame(()=>focusPdf(anchor));
@@ -140,6 +150,15 @@
   });
   left.addEventListener('wheel',cancelGlide,{passive:true});
   mobileTabs.forEach(tab=>tab.addEventListener('click',event=>{event.preventDefault();showMobilePane(tab.dataset.mobileView);}));
+  // Every fragment link is resolved in-page by the handlers above. A host that
+  // frames this document treats one that escapes as a navigation away from the
+  // reply: Claude Desktop prompts "open external link" and chatgpt.app follows
+  // it out. Cancel the default for all of them in the capture phase, including
+  // links whose own handler bailed out early. preventDefault does not stop
+  // propagation, so the handlers above still run.
+  document.addEventListener('click',event=>{
+    if(event.target.closest?.('a[href^="#"]'))event.preventDefault();
+  },true);
   document.addEventListener('click',event=>{
     if(event.target.closest('.a,.hl,.media-jump'))return;
     clearSelection();
@@ -204,7 +223,10 @@
     if(event.key==='k'||event.key==='ArrowUp'){event.preventDefault();proseLinks[Math.max(0,index-1)]?.click();}
   });
 
-  const target=location.hash?document.querySelector(location.hash):null;
+  // A framing host can leave its own fragment on our location, so this may not
+  // be a selector we emitted, or a valid selector at all.
+  let target=null;
+  try{target=location.hash?document.querySelector(location.hash):null;}catch(err){target=null;}
   if(isMobile()){
     if(target?.classList.contains('hl')){
       showMobilePane('pdf',false,false);
