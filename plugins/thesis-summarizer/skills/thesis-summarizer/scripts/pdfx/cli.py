@@ -10,6 +10,23 @@ def _c(s, code):
     return f"\033[{code}m{s}\033[0m" if sys.stdout.isatty() else s
 
 
+def _utf8_io():
+    """Print unicode regardless of the console code page.
+
+    A redirected stream on Windows defaults to the locale encoding (cp932 on a
+    Japanese system), which cannot encode the Greek letters, subscripts, and
+    math operators extracted from a paper.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            pass
+
+
 def cmd_init(a):
     from .extract import init
     meta = init(a.pdf, a.out, dpi=a.dpi, force=a.force)
@@ -203,6 +220,7 @@ def cmd_verify(a):
 
 
 def main(argv=None):
+    _utf8_io()
     p = argparse.ArgumentParser(prog="pdfx", description=__doc__)
     p.add_argument("--version", action="version", version=f"pdfx {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)

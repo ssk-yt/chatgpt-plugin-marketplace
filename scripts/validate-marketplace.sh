@@ -200,3 +200,152 @@ print(f"Marketplace validation passed: {len(plugin_paths)} plugin(s)")
 for plugin_path in plugin_paths:
     print(f"  - {plugin_path.name}")
 PY
+
+python3 - <<'PY'
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+root = Path(os.environ["REPO_ROOT"]).resolve()
+codex_marketplace_path = root / ".agents" / "plugins" / "marketplace.json"
+claude_marketplace_path = root / ".claude-plugin" / "marketplace.json"
+errors: list[str] = []
+
+
+def fail(message: str) -> None:
+    errors.append(message)
+
+
+def load_json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail(f"missing JSON file: {path.relative_to(root)}")
+    except json.JSONDecodeError as exc:
+        fail(f"invalid JSON in {path.relative_to(root)}: {exc}")
+    return None
+
+
+def inside_repo(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+codex = load_json(codex_marketplace_path)
+claude = load_json(claude_marketplace_path)
+
+if not isinstance(claude, dict) or not isinstance(codex, dict):
+    for error in errors:
+        print(f"  - {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(claude.get("name"), str) or not claude["name"]:
+    fail("claude marketplace.name must be a non-empty string")
+elif claude["name"] != codex.get("name"):
+    fail(
+        f"marketplace name mismatch: .claude-plugin={claude['name']!r} "
+        f".agents={codex.get('name')!r}"
+    )
+
+owner = claude.get("owner")
+if not isinstance(owner, dict) or not isinstance(owner.get("name"), str) or not owner["name"]:
+    fail("claude marketplace.owner.name must be a non-empty string")
+
+claude_plugins = claude.get("plugins")
+if not isinstance(claude_plugins, list) or not claude_plugins:
+    fail("claude marketplace.plugins must be a non-empty array")
+    claude_plugins = []
+
+codex_names = {
+    entry["name"]
+    for entry in codex.get("plugins", [])
+    if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+}
+claude_names: set[str] = set()
+checked = 0
+
+for index, entry in enumerate(claude_plugins):
+    label = f"claude plugins[{index}]"
+    if not isinstance(entry, dict):
+        fail(f"{label} must be an object")
+        continue
+    name = entry.get("name")
+    if not isinstance(name, str) or not name:
+        fail(f"{label}.name must be a non-empty string")
+        continue
+    if name in claude_names:
+        fail(f"duplicate plugin name in claude marketplace: {name}")
+    claude_names.add(name)
+
+    source = entry.get("source")
+    if not isinstance(source, str) or not source.startswith("./"):
+        fail(f"{name}: claude source must be a ./ relative path string")
+        continue
+    plugin_path = (root / source).resolve()
+    if not inside_repo(plugin_path) or not plugin_path.is_dir():
+        fail(f"{name}: claude source path is missing or escapes the repository: {source}")
+        continue
+    if plugin_path.name != name:
+        fail(f"{name}: claude source directory name does not match plugin name")
+
+    # A pinned version stops Claude Code from tracking new commits, which would
+    # silently break push-to-update. Version lives in plugin.json instead.
+    if "version" in entry:
+        fail(
+            f"{name}: do not pin version in the claude marketplace entry; "
+            "it disables commit-tracked updates"
+        )
+
+    claude_manifest = load_json(plugin_path / ".claude-plugin" / "plugin.json")
+    codex_manifest = load_json(plugin_path / ".codex-plugin" / "plugin.json")
+    if not isinstance(claude_manifest, dict) or not isinstance(codex_manifest, dict):
+        continue
+    checked += 1
+
+    for key in ("name", "version", "description"):
+        if key not in claude_manifest:
+            fail(f"{name}: claude plugin.json missing required key {key!r}")
+        elif claude_manifest.get(key) != codex_manifest.get(key):
+            fail(
+                f"{name}: {key} differs between .claude-plugin and .codex-plugin "
+                f"({claude_manifest.get(key)!r} != {codex_manifest.get(key)!r})"
+            )
+    if claude_manifest.get("name") != name:
+        fail(f"{name}: claude plugin.json name does not match marketplace name")
+
+    author = claude_manifest.get("author")
+    if not isinstance(author, dict) or not isinstance(author.get("name"), str) or not author["name"]:
+        fail(f"{name}: claude plugin.json author.name must be a non-empty string")
+
+    skills_value = claude_manifest.get("skills")
+    if not isinstance(skills_value, str) or not skills_value.startswith("./"):
+        fail(f"{name}: claude plugin.json skills must be a ./ relative path")
+    else:
+        if skills_value != codex_manifest.get("skills"):
+            fail(f"{name}: skills path differs between .claude-plugin and .codex-plugin")
+        skills_root = (plugin_path / skills_value).resolve()
+        if not inside_repo(skills_root) or not skills_root.is_dir():
+            fail(f"{name}: claude skills path is missing or unsafe")
+        elif not sorted(skills_root.rglob("SKILL.md")):
+            fail(f"{name}: no SKILL.md found below claude skills path")
+
+missing = codex_names - claude_names
+extra = claude_names - codex_names
+for name in sorted(missing):
+    fail(f"{name}: listed in .agents marketplace but not in .claude-plugin marketplace")
+for name in sorted(extra):
+    fail(f"{name}: listed in .claude-plugin marketplace but not in .agents marketplace")
+
+if errors:
+    print("Claude marketplace validation failed:", file=sys.stderr)
+    for error in errors:
+        print(f"  - {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+print(f"Claude marketplace validation passed: {checked} plugin(s) in sync")
+PY

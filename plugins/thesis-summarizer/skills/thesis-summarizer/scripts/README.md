@@ -5,7 +5,7 @@ rendered PDF on the right, and clicking any phrase in the prose highlights the
 exact source text it came from — using the PDF's real text-layer coordinates,
 not an estimate.
 
-    pip install pypdfium2 pillow      # pypdfium2 is Apache-2.0/BSD; avoid AGPL PyMuPDF
+    <PY> -m pip install pypdfium2 pillow   # Apache-2.0/BSD; avoid AGPL PyMuPDF
 
     pdfx init paper.pdf -o work/      # extract text, cache page images
     pdfx text work/                   # read all indexed source units
@@ -13,11 +13,20 @@ not an estimate.
     pdfx verify work/                 # coverage heuristics + contact sheets
     pdfx find work/ "some phrase"     # probe one phrase, with near-miss hints
 
+`<PY>` is `python3` on macOS and Linux, `python` or `py -3` on Windows. There is
+no `pdfx` executable on `PATH`; run each command through the launcher, which
+needs no `PYTHONPATH` and works the same in bash, zsh, PowerShell, and cmd:
+
+    <PY> "<this directory>/run_pdfx.py" init paper.pdf -o work/
+
+`<PY> -m pdfx` also works when `PYTHONPATH` already includes this directory.
+
 ## Module map
 
 | file          | responsibility |
 |---------------|----------------|
-| `cli.py`      | argparse subcommands, diagnostics formatting |
+| `run_pdfx.py` | cross-platform entry point; sets `sys.path`, then calls `cli.main` |
+| `cli.py`      | argparse subcommands, diagnostics formatting, UTF-8 output |
 | `extract.py`  | PDF → `text/pNN.txt`, `pages/pNN.png`, `pdfx.json` |
 | `anchors.py`  | phrase → page rects; `suggest()` for near-misses; `highlighted_text()` |
 | `parse.py`    | `content.md` → blocks + spans (`{{p3\|phrase\|表示}}`) |

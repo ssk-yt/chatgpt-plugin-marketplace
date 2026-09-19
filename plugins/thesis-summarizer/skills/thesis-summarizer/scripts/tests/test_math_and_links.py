@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -193,6 +196,41 @@ class HighlightInteractionTests(unittest.TestCase):
         self.assertIn("const emphasisId=hoveredId||selectedId", js)
         self.assertIn("link.addEventListener('mouseenter'", js)
         self.assertIn("hit.dataset.anchor===emphasisId", js)
+
+
+class CrossPlatformEntryPointTests(unittest.TestCase):
+    """run_pdfx.py must behave the same on Linux, macOS, and Windows."""
+
+    LAUNCHER = Path(__file__).resolve().parents[1] / "run_pdfx.py"
+
+    def _run(self, *args, extra_env=None):
+        env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+        env.update(extra_env or {})
+        with TemporaryDirectory() as cwd:
+            return subprocess.run(
+                [sys.executable, str(self.LAUNCHER), *args],
+                capture_output=True, cwd=cwd, env=env,
+            )
+
+    def test_launcher_runs_without_pythonpath_from_an_unrelated_cwd(self):
+        proc = self._run("--version")
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", "replace"))
+        self.assertIn("pdfx", proc.stdout.decode("utf-8", "replace"))
+
+    def test_unicode_output_survives_a_non_utf8_console(self):
+        # A Japanese Windows console reports cp932, which cannot encode U+2080.
+        with TemporaryDirectory() as d:
+            wd = Path(d)
+            (wd / "text").mkdir()
+            (wd / "text" / "p01.txt").write_text(
+                "The energy E₀ depends on α.\n日本語。\n",
+                encoding="utf-8")
+            (wd / "pdfx.json").write_text('{"pages": 1}', encoding="utf-8")
+            proc = self._run("text", str(wd), extra_env={"PYTHONIOENCODING": "cp932"})
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", "replace"))
+        out = proc.stdout.decode("utf-8", "replace")
+        self.assertIn("E₀", out)
+        self.assertIn("日本語", out)
 
 
 if __name__ == "__main__":

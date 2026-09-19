@@ -1,0 +1,21 @@
+{
+  "name": "sskyt-plugins",
+  "description": "sskyt plugins for Claude Code. Currently contains thesis-summarizer.",
+  "owner": {
+    "name": "ssk-yt",
+    "url": "https://github.com/ssk-yt"
+  },
+  "plugins": [
+    {
+      "name": "thesis-summarizer",
+      "source": "./plugins/thesis-summarizer",
+      "description": "Turn theses and research papers into self-contained, bidirectionally linked explainers.",
+      "category": "productivity",
+      "author": {
+        "name": "ssk-yt"
+      },
+      "homepage": "https://github.com/ssk-yt/chatgpt-plugin-marketplace",
+      "keywords": ["pdf", "research", "paper", "summary", "japanese"]
+    }
+  ]
+}

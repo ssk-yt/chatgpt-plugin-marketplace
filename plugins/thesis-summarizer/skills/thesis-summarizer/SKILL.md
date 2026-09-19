@@ -16,20 +16,44 @@ do not reimplement those mechanics.
 
 ## Runtime
 
-```bash
-SKILL_DIR=<directory containing this SKILL.md>
-PYTHONPATH="$SKILL_DIR/scripts${PYTHONPATH:+:$PYTHONPATH}" python3 -m pdfx --version
+`pdfx` ships inside this skill. Resolve two values once, then reuse them for
+every command.
+
+**`<PY>`** — the first of `python3`, `python`, or `py -3` that reports Python
+3.10 or newer. macOS and Linux normally provide `python3`; Windows normally
+provides `python` and the `py` launcher, and no `python3`.
+
+**`<PDFX>`** — `<SKILL_DIR>/scripts/run_pdfx.py`, where `<SKILL_DIR>` is the
+directory containing this `SKILL.md`. Always quote it: the path may contain
+spaces. Forward slashes work on Windows too.
+
+Confirm both before starting:
+
+```text
+<PY> "<PDFX>" --version
 ```
 
-Use that module form for every command. If `pypdfium2` or Pillow is missing,
-install them into a task-local directory and prepend it to `PYTHONPATH`. Ask for
-network permission when required; do not install system-wide.
+Every `pdfx ...` command below is written in its canonical short form. Run it
+as `<PY> "<PDFX>" ...`, so `pdfx init paper.pdf -o work/` becomes:
+
+```text
+<PY> "<PDFX>" init paper.pdf -o work/
+```
+
+That launcher needs no `PYTHONPATH` and no working directory of its own, so one
+spelling works in bash, zsh, PowerShell, and cmd. Do not compose shell-specific
+environment prefixes; they differ between POSIX shells and PowerShell.
+
+If `pypdfium2` or Pillow is missing, install them for the current user with
+`<PY> -m pip install --user pypdfium2 pillow`, or into a task-local directory
+that you add to `PYTHONPATH`. Ask for network permission when required; do not
+install system-wide.
 
 ## Workflow
 
 ### 1. Extract and read the complete paper
 
-```bash
+```text
 pdfx init paper.pdf -o work/
 pdfx text work/
 ```
@@ -80,7 +104,7 @@ may remain unlinked.
 
 ### 4. Build
 
-```bash
+```text
 pdfx build work/
 ```
 
@@ -94,7 +118,7 @@ or extraction problems require diagnosis, read
 
 Read [references/quality.md](references/quality.md), then run:
 
-```bash
+```text
 pdfx verify work/ --flagged-only
 ```
 
