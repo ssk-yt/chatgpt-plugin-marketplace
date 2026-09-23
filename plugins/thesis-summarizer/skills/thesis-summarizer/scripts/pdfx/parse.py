@@ -24,14 +24,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .mathml import render_inline_math
+from .mathml import MathSyntaxError, render_inline_math
 
-ID_SPAN_RE = re.compile(r"\{\{\s*(s(\d+)\.(\d+))\s*\|(.+?)\}\}", re.S)
-LEGACY_SPAN_RE = re.compile(r"\{\{\s*p(\d+)(?:#(\d+))?\s*\|(.+?)\|(.+?)\}\}", re.S)
-SPAN_RE = re.compile(
-    r"\{\{\s*(?:s\d+\.\d+\s*\|.+?|p\d+(?:#\d+)?\s*\|.+?\|.+?)\}\}",
-    re.S,
-)
+ID_SELECTOR_RE = re.compile(r"s(\d+)\.(\d+)")
+LEGACY_SELECTOR_RE = re.compile(r"p(\d+)(?:#(\d+))?")
 PHRASE_SEP = ";;"
 NUMBER = r"(?:\d+(?:\.\d+)?|\.\d+)"
 MAX_MEDIA_CROP_HEIGHT = 92.0
@@ -75,49 +71,120 @@ class ParseError(SystemExit):
     pass
 
 
+@dataclass
+class SourceToken:
+    start: int
+    end: int
+    raw: str
+    selector: str
+    page: int
+    occ: int
+    phrases: list[str]
+    visible: str
+    source_id: str | None
+
+
+def _top_level_fields(value: str) -> list[str]:
+    fields: list[str] = []
+    start = depth = 0
+    for index, char in enumerate(value):
+        escaped = index > 0 and value[index - 1] == "\\"
+        if char == "{" and not escaped:
+            depth += 1
+        elif char == "}" and not escaped and depth:
+            depth -= 1
+        elif char == "|" and depth == 0:
+            fields.append(value[start:index])
+            start = index + 1
+    fields.append(value[start:])
+    return fields
+
+
+def _source_tokens(text: str, line: int) -> list[SourceToken]:
+    """Scan source anchors without mistaking TeX group braces for `}}`."""
+    tokens: list[SourceToken] = []
+    cursor = 0
+    while True:
+        start = text.find("{{", cursor)
+        if start < 0:
+            break
+        index, depth, end = start + 2, 0, None
+        while index < len(text):
+            if text.startswith("}}", index) and depth == 0:
+                end = index + 2
+                break
+            char = text[index]
+            escaped = index > start + 2 and text[index - 1] == "\\"
+            if char == "{" and not escaped:
+                depth += 1
+            elif char == "}" and not escaped:
+                if depth == 0:
+                    raise ParseError(f"content.md:{line}: unmatched '}}' in source anchor")
+                depth -= 1
+            index += 1
+        if end is None:
+            raise ParseError(f"content.md:{line}: unclosed source anchor")
+
+        raw = text[start:end]
+        fields = _top_level_fields(raw[2:-2].strip())
+        selector = fields[0].strip() if fields else ""
+        id_match = ID_SELECTOR_RE.fullmatch(selector)
+        legacy_match = LEGACY_SELECTOR_RE.fullmatch(selector)
+        if id_match and len(fields) == 2:
+            source_id = selector
+            page = int(id_match.group(1)) - 1
+            occ = 0
+            phrases: list[str] = []
+            visible = fields[1].strip()
+        elif legacy_match and len(fields) == 3:
+            source_id = None
+            page = int(legacy_match.group(1)) - 1
+            occ = int(legacy_match.group(2) or 1) - 1
+            phrases = [part.strip() for part in fields[1].split(PHRASE_SEP)
+                       if part.strip()]
+            visible = fields[2].strip()
+        else:
+            raise ParseError(f"content.md:{line}: invalid source anchor {raw[:80]}")
+        if page < 0:
+            raise ParseError(f"content.md:{line}: page numbers are 1-based")
+        if source_id is None and not phrases:
+            raise ParseError(f"content.md:{line}: empty source phrase in {raw[:80]}")
+        tokens.append(SourceToken(start, end, raw, selector, page, occ,
+                                  phrases, visible, source_id))
+        cursor = end
+    return tokens
+
+
 def parse(src: str) -> tuple[list[Block], list[Span]]:
     counter = [0]
     all_spans: list[Span] = []
 
     def expand(text: str, line: int) -> tuple[str, list[Span]]:
+        def render_checked(value: str, at: int) -> str:
+            try:
+                return render_inline_math(value)
+            except MathSyntaxError as error:
+                raise ParseError(f"content.md:{at}: {error}") from error
+
         spans: list[Span] = []
         out: list[str] = []
         position = 0
-        for m in SPAN_RE.finditer(text):
-            out.append(render_inline_math(text[position:m.start()]))
+        for token in _source_tokens(text, line):
+            source_line = line + text[:token.start].count("\n")
+            out.append(render_checked(text[position:token.start], source_line))
             counter[0] += 1
             aid = f"a{counter[0]:03d}"
-            token = m.group(0)
-            id_match = ID_SPAN_RE.fullmatch(token)
-            legacy_match = LEGACY_SPAN_RE.fullmatch(token)
-            if id_match:
-                source_id = id_match.group(1)
-                page = int(id_match.group(2)) - 1
-                occ = 0
-                phrases = []
-                visible = id_match.group(4).strip()
-            elif legacy_match:
-                source_id = None
-                page = int(legacy_match.group(1)) - 1
-                occ = int(legacy_match.group(2) or 1) - 1
-                phrases = [p.strip() for p in legacy_match.group(3).split(PHRASE_SEP)
-                           if p.strip()]
-                visible = legacy_match.group(4).strip()
-            else:
-                raise ParseError(f"content.md:{line}: invalid source anchor {token[:60]}")
-            if page < 0:
-                raise ParseError(f"content.md:{line}: page numbers are 1-based")
-            if source_id is None and not phrases:
-                raise ParseError(f"content.md:{line}: empty source phrase in {m.group(0)[:60]}")
-            sp = Span(aid, page, occ, phrases, visible, line, source_id)
+            sp = Span(aid, token.page, token.occ, token.phrases, token.visible,
+                      source_line, token.source_id)
             spans.append(sp)
             all_spans.append(sp)
             # Real anchors keep the bidirectional link usable in HTML previews
             # that deliberately disable JavaScript (including some mobile apps).
             out.append(f'<a class="a" id="prose-{aid}" href="#source-{aid}-1" '
-                       f'data-anchor="{aid}">{render_inline_math(visible)}</a>')
-            position = m.end()
-        out.append(render_inline_math(text[position:]))
+                       f'data-anchor="{aid}">{render_checked(token.visible, source_line)}</a>')
+            position = token.end
+        tail_line = line + text[:position].count("\n")
+        out.append(render_checked(text[position:], tail_line))
         return "".join(out), spans
 
     blocks: list[Block] = []
@@ -132,7 +199,7 @@ def parse(src: str) -> tuple[list[Block], list[Span]]:
         para = []
         if not raw:
             return
-        prepared = _eq_lines(raw)
+        prepared = _eq_lines(raw, para_line)
         html, spans = expand(prepared, para_line)
         blocks.append(Block("p", html=html, spans=spans, line=para_line,
                             link_gaps=_find_link_gaps(prepared)))
@@ -162,7 +229,7 @@ def parse(src: str) -> tuple[list[Block], list[Span]]:
                 layout = title.strip().lower()
                 blocks.append(_media_block(body, body_line, layout, expand))
                 continue
-            inner = _eq_lines("\n".join(body))
+            inner = _eq_lines("\n".join(body), body_line)
             html, spans = expand(inner, body_line)
             blocks.append(Block(kind, title=title.strip(), html=html, spans=spans,
                                 line=body_line, link_gaps=_find_link_gaps(inner)))
@@ -280,21 +347,36 @@ def _media_block(lines: list[str], body_line: int, layout: str, expand) -> Block
     return Block("media", title=layout, line=body_line, link_gaps=gaps, media=items)
 
 
-def _eq_lines(text: str) -> str:
+def _eq_lines(text: str, start_line: int = 1) -> str:
     out = []
-    for ln in text.split("\n"):
+    for offset, ln in enumerate(text.split("\n")):
         if ln.strip().startswith("= "):
+            line = start_line + offset
             expression = ln.strip()[2:].strip()
-            id_match = ID_SPAN_RE.fullmatch(expression)
-            legacy_match = LEGACY_SPAN_RE.fullmatch(expression)
-            if id_match:
-                expression = f"{{{{{id_match.group(1)}|\\({id_match.group(4).strip()}\\)}}}}"
-            elif legacy_match:
-                selector = (f"p{legacy_match.group(1)}" +
-                            (f"#{legacy_match.group(2)}" if legacy_match.group(2) else ""))
-                expression = (f"{{{{{selector}|{legacy_match.group(3)}|"
-                              f"\\({legacy_match.group(4).strip()}\\)}}}}")
+            tokens = _source_tokens(expression, line)
+            if len(tokens) > 1:
+                raise ParseError(
+                    f"content.md:{line}: one display equation cannot cross source links; "
+                    "write each source-linked equation as a complete '= {{source|TeX}}' line"
+                )
+            if tokens and (tokens[0].start != 0 or tokens[0].end != len(expression)):
+                raise ParseError(
+                    f"content.md:{line}: a display equation line must contain exactly one "
+                    "complete source anchor"
+                )
+            if tokens and tokens[0].source_id:
+                token = tokens[0]
+                visible = token.visible
+                _reject_display_delimiters(visible, line)
+                expression = f"{{{{{token.source_id}|\\({visible}\\)}}}}"
+            elif tokens:
+                token = tokens[0]
+                visible = token.visible
+                _reject_display_delimiters(visible, line)
+                expression = (f"{{{{{token.selector}|{PHRASE_SEP.join(token.phrases)}|"
+                              f"\\({visible}\\)}}}}")
             else:
+                _reject_display_delimiters(expression, line)
                 expression = f"\\({expression}\\)"
             out.append(f'<div class="eq">{expression}</div>')
         else:
@@ -302,11 +384,27 @@ def _eq_lines(text: str) -> str:
     return "\n".join(out)
 
 
+def _reject_display_delimiters(expression: str, line: int) -> None:
+    if re.search(r"\\[()]|(?<!\\)\$", expression):
+        raise ParseError(
+            f"content.md:{line}: '= ' already creates display math; remove inline "
+            "delimiters \\( \\) or $ from inside the source anchor"
+        )
+
+
 def _find_link_gaps(text: str) -> list[str]:
     """Return lexical prose/equations left outside source-link spans."""
+    parts, position = [], 0
+    for token in _source_tokens(text, 1):
+        parts.append(text[position:token.start])
+        parts.append(" ")
+        position = token.end
+    parts.append(text[position:])
+    unlinked = "".join(parts)
+
     gaps: list[str] = []
-    for line in text.splitlines():
-        remainder = SPAN_RE.sub(" ", line)
+    for line in unlinked.splitlines():
+        remainder = line
         remainder = re.sub(r"<[^>]+>", " ", remainder)
         remainder = remainder.replace("\\(", " ").replace("\\)", " ")
         remainder = re.sub(r"&(?:[A-Za-z]+|#\d+|#x[0-9A-Fa-f]+);", " ", remainder)

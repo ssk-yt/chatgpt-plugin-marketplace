@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import html
 import re
+from html.parser import HTMLParser
 
 
 GREEK = {
@@ -24,7 +25,26 @@ SYMBOLS = {
     "rightarrow": "→", "leftarrow": "←", "Rightarrow": "⇒",
     "Leftarrow": "⇐", "partial": "∂", "nabla": "∇", "sum": "∑",
     "prod": "∏", "int": "∫", "hbar": "ℏ", "ell": "ℓ",
+    "in": "∈", "notin": "∉", "subset": "⊂", "subseteq": "⊆",
+    "supset": "⊃", "supseteq": "⊇", "equiv": "≡", "simeq": "≃",
+    "cong": "≅", "perp": "⊥", "parallel": "∥", "forall": "∀",
+    "exists": "∃",
 }
+
+OPERATORS = {"lim", "max", "min", "log", "ln", "exp", "sin", "cos", "tan"}
+MATH_VARIANTS = {
+    "mathbf": "bold",
+    "boldsymbol": "bold-italic",
+    "mathit": "italic",
+    "mathsf": "sans-serif",
+    "mathtt": "monospace",
+    "mathcal": "script",
+    "mathbb": "double-struck",
+}
+
+
+class MathSyntaxError(ValueError):
+    """Authoring error that would otherwise leave broken TeX in the HTML."""
 
 SUPER = str.maketrans({"⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
                        "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9"})
@@ -51,11 +71,15 @@ class _Parser:
 
     def parse(self, stop: str | None = None) -> str:
         nodes: list[str] = []
+        closed = stop is None
         while self.index < len(self.source):
             char = self.source[self.index]
             if stop and char == stop:
                 self.index += 1
+                closed = True
                 break
+            if char == "}":
+                raise MathSyntaxError("unmatched '}'")
             if char.isspace():
                 self.index += 1
                 continue
@@ -76,6 +100,8 @@ class _Parser:
             elif superscript is not None:
                 node = f"<msup>{node}{superscript}</msup>"
             nodes.append(node)
+        if not closed:
+            raise MathSyntaxError(f"missing closing {stop!r}")
         return _row(nodes)
 
     def atom(self) -> str:
@@ -116,18 +142,23 @@ class _Parser:
             return f"<msqrt>{self.required_group()}</msqrt>"
         if name in {"mathrm", "operatorname"}:
             return f'<mstyle mathvariant="normal">{self.required_group()}</mstyle>'
+        if name in MATH_VARIANTS:
+            return (f'<mstyle mathvariant="{MATH_VARIANTS[name]}">'
+                    f'{self.required_group()}</mstyle>')
         if name == "text":
             return _tag("mtext", self.raw_group())
         if name in GREEK:
             return _tag("mi", GREEK[name])
         if name in SYMBOLS:
             return _tag("mo", SYMBOLS[name])
+        if name in OPERATORS:
+            return _tag("mo", name)
         if name in {",", ";", "quad", "qquad"}:
             width = {",": ".17em", ";": ".28em", "quad": "1em", "qquad": "2em"}[name]
             return f'<mspace width="{width}"></mspace>'
         if name in {"left", "right"}:
             return self.atom() if self.index < len(self.source) else ""
-        return _tag("mi", name)
+        raise MathSyntaxError(f"unsupported TeX command \\{name}")
 
     def required_group(self) -> str:
         while self.index < len(self.source) and self.source[self.index].isspace():
@@ -158,6 +189,12 @@ class _Parser:
         if self.index < len(self.source) and self.source[self.index] == "{":
             self.index += 1
             return self.parse("}")
+        if (self.index + 1 < len(self.source)
+                and self.source[self.index] in "+-"
+                and not self.source[self.index + 1].isspace()):
+            raise MathSyntaxError(
+                "signed or multi-character scripts need braces, for example ^{-5}"
+            )
         return self.atom() if self.index < len(self.source) else "<mrow></mrow>"
 
     def _peek(self, offset: int) -> str:
@@ -179,6 +216,10 @@ def _normalise_unicode_scripts(source: str) -> str:
 
 def render_math(source: str, *, display: bool = False) -> str:
     tex = source.strip()
+    if re.search(r"\\[()]|(?<!\\)\$", tex):
+        raise MathSyntaxError(
+            "math delimiters are nested inside a math expression; remove \\( \\) or $"
+        )
     body = _Parser(_normalise_unicode_scripts(tex)).parse()
     display_attr = ' display="block"' if display else ""
     css_class = "math-display" if display else "math-inline"
@@ -190,10 +231,56 @@ def render_math(source: str, *, display: bool = False) -> str:
 
 
 INLINE_MATH_RE = re.compile(r"\\\((.+?)\\\)|(?<!\\)\$(?!\$)(.+?)(?<!\\)\$")
+RAW_TEX_RE = re.compile(
+    r"\\[A-Za-z]+|\\[()]|(?<=[A-Za-z0-9}\)])[_^](?=\{?[+\-A-Za-z0-9])"
+)
 
 
 def render_inline_math(text: str) -> str:
     def replace(match: re.Match[str]) -> str:
         return render_math(match.group(1) or match.group(2), display=False)
 
+    plain = INLINE_MATH_RE.sub("", text)
+    visible_plain = re.sub(r"<[^>]+>", " ", plain)
+    residue = RAW_TEX_RE.search(visible_plain)
+    if residue:
+        raise MathSyntaxError(
+            f"TeX-like text {residue.group(0)!r} is outside math delimiters; "
+            "wrap inline math in \\(...\\)"
+        )
+    if "$" in visible_plain or "\\(" in visible_plain or "\\)" in visible_plain:
+        raise MathSyntaxError("unmatched inline math delimiter")
     return INLINE_MATH_RE.sub(replace, text)
+
+
+class _VisibleOutsideMath(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.skip = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"math", "script", "style"}:
+            self.skip += 1
+
+    def handle_endtag(self, tag):
+        if tag in {"math", "script", "style"} and self.skip:
+            self.skip -= 1
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.parts.append(data)
+
+
+OUTPUT_TEX_RESIDUE_RE = re.compile(
+    r"\\[A-Za-z]+|\\[()]|(?<=[A-Za-z0-9}\)])[_^](?=\{?[+\-A-Za-z0-9])|"
+    r"\b(?:arepsilon|varepsilon|epsilon|lambda|rho|mu|boldsymbol|mathbf|mathrm|frac)\b"
+)
+
+
+def output_math_residue(document: str) -> list[str]:
+    """Return likely unconverted TeX visible outside generated MathML."""
+    parser = _VisibleOutsideMath()
+    parser.feed(document)
+    visible = " ".join(parser.parts)
+    return sorted(set(match.group(0) for match in OUTPUT_TEX_RESIDUE_RE.finditer(visible)))

@@ -38,9 +38,8 @@ Use source IDs printed by `pdfx text`. One source ID may appear exactly once in
 :::
 ```
 
-`= `で始まる行は中央配置の数式になる。Visible text supports TeX-like
-fractions, roots, subscripts, superscripts, Greek letters, relations, and
-operators. Inline math may use `\(...\)` or `$...$`.
+For all equation and inline-math syntax, follow [math.md](math.md). Do not put
+inline delimiters inside a line beginning with `= `.
 
 Crop coordinates are `page x y width height` in page-relative percentages.
 Use `figure` for one figure, `table` for one table, and `compare` for exactly

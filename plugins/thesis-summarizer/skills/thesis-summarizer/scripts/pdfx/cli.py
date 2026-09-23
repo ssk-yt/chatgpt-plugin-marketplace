@@ -107,6 +107,23 @@ def _report_link_gaps(blocks):
     return gaps
 
 
+def _report_math_residue(path: Path):
+    from .mathml import output_math_residue
+
+    if not path.exists():
+        return []
+    residue = output_math_residue(path.read_text(encoding="utf-8"))
+    for token in residue:
+        print(_c("MATH output", "31"), repr(token), "is visible outside MathML")
+    if residue:
+        print(_c(
+            f"\n{len(residue)} likely unconverted TeX token(s). "
+            "Fix delimiters or commands in content.md and rebuild.",
+            "31",
+        ))
+    return residue
+
+
 def _validate_pages(doc, blocks, spans):
     for sp in spans:
         if sp.page >= doc.n_pages:
@@ -166,6 +183,8 @@ def cmd_build(a):
                      "phrases": sp.phrases, "line": sp.line}
                     for an, sp in zip(anchors, spans)], ensure_ascii=False, indent=1),
         encoding="utf-8")
+    if _report_math_residue(out):
+        return 1
     kb = out.stat().st_size / 1024
     print(_c(f"OK  {len(anchors)} anchors resolved, 0 missing -> {out} ({kb:.0f} KB)", "32"))
     return 0
@@ -186,6 +205,8 @@ def cmd_verify(a):
     by_id = {x["id"]: x for x in anchors}
     rows = V.coverage(spans, by_id, doc)
     media_sheet = V.media_contact_sheet(a.workdir, blocks)
+    if _report_math_residue(wd / "out" / "explainer.html"):
+        return 1
 
     ranked = sorted(rows, key=lambda r: -r["ratio"])
     flagged = [r for r in ranked if r["flag"] == "WIDE"]

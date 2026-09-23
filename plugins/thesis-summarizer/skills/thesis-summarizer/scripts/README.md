@@ -55,6 +55,11 @@ The TeX-like subset supports fractions, square roots, subscripts, superscripts,
 Greek letters, and common operators. It is rendered to MathML locally, so the
 generated HTML remains self-contained and does not load a CDN.
 
+Inline math uses `\(...\)`. A line beginning with `= ` is already display math,
+so its single source anchor contains the TeX body without another delimiter.
+Display expressions cannot span anchors. Unknown commands, unbraced signed
+scripts such as `^-5`, and visible TeX residue outside MathML stop the build.
+
 PDF page crops use page-relative percentages and are embedded into the output.
 Each crop must contain only the figure or table and its caption, without body
 prose, equations, headers, footers, or neighboring media:

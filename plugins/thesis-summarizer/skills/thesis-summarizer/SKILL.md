@@ -88,8 +88,9 @@ source is missing, unreadable, or the requirements conflict materially.
 
 ### 3. Write `work/content.md`
 
-Read [references/authoring.md](references/authoring.md), then write the complete
-explainer. The preferred source link is:
+Read [references/authoring.md](references/authoring.md) and the mandatory
+[references/math.md](references/math.md), then write the complete explainer.
+The preferred source link is:
 
 ```text
 {{s3.12|表示する日本語の短い主張}}
@@ -133,7 +134,8 @@ pdfx verify work/ --flagged-only
 Inspect the reported coverage and every generated media crop. Correct the
 content and rebuild until all text is linked, every source ID is unique, each
 short claim is supported by its highlighted source unit, and each figure/table
-crop contains only the media plus its original caption.
+crop contains only the media plus its original caption. Treat every `MATH`
+diagnostic as a blocking error.
 
 ### 6. Deliver
 

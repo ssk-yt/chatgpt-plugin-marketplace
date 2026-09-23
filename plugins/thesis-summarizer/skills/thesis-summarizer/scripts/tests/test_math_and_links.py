@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 from PIL import Image
 
-from pdfx.mathml import render_inline_math, render_math
+from pdfx.mathml import MathSyntaxError, output_math_residue, render_inline_math, render_math
 from pdfx.parse import ParseError, parse
 from pdfx.render import ASSETS, body_html
 from pdfx.sources import page_units
@@ -26,6 +26,34 @@ class MathRenderingTests(unittest.TestCase):
     def test_inline_delimiters_render(self):
         html = render_inline_math(r"energy \(E_0\) and $Q^2$")
         self.assertEqual(html.count('<math class="math-inline"'), 2)
+
+    def test_html_attribute_underscores_are_not_tex_residue(self):
+        self.assertEqual(render_inline_math('<span class="math_note">注記</span>'),
+                         '<span class="math_note">注記</span>')
+
+    def test_bold_math_commands_render_without_literal_command_names(self):
+        html = render_math(r"\mathbf{r}+\boldsymbol{\varepsilon}")
+        self.assertIn('mathvariant="bold"', html)
+        self.assertIn('mathvariant="bold-italic"', html)
+        self.assertNotIn(">mathbf<", html)
+        self.assertNotIn(">boldsymbol<", html)
+
+    def test_unknown_tex_command_is_rejected(self):
+        with self.assertRaisesRegex(MathSyntaxError, "unsupported TeX command"):
+            render_math(r"\notacommand{x}")
+
+    def test_signed_exponent_requires_braces(self):
+        with self.assertRaisesRegex(MathSyntaxError, "need braces"):
+            render_math(r"O(L^-5)")
+        self.assertIn("<msup>", render_math(r"O(L^{-5})"))
+
+    def test_visible_output_scan_ignores_tex_annotation_inside_math(self):
+        rendered = render_math(r"E_0=\frac{1}{2}")
+        valid = f"<p>{rendered}</p>"
+        self.assertEqual(output_math_residue(valid), [])
+        self.assertEqual(output_math_residue(r"<p>broken \varepsilon and L^-5</p>"),
+                         [r"\varepsilon", "^"])
+        self.assertEqual(output_math_residue("<p>broken lambda</p>"), ["lambda"])
 
 
 class LinkCoverageTests(unittest.TestCase):
@@ -59,6 +87,36 @@ class LinkCoverageTests(unittest.TestCase):
         self.assertEqual(blocks[0].link_gaps, [])
         self.assertEqual(spans[0].source_id, "s1.2")
         self.assertIn("<mfrac>", blocks[0].html)
+
+    def test_tex_group_braces_do_not_close_source_anchor(self):
+        blocks, spans = parse(
+            r"= {{s1.2|E_{\mathrm{FNV}}=E_{\mathrm{PC}}+O(L^{-5})}}"
+        )
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].text,
+                         r"\(E_{\mathrm{FNV}}=E_{\mathrm{PC}}+O(L^{-5})\)")
+        self.assertEqual(blocks[0].html.count("<math"), 1)
+
+    def test_multiline_source_anchor_remains_supported(self):
+        blocks, spans = parse("{{s1.2|一行目\n二行目 \\(E_0\\)}}")
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(blocks[0].link_gaps, [])
+        self.assertEqual(blocks[0].html.count("<math"), 1)
+
+    def test_display_equation_rejects_nested_inline_delimiters(self):
+        with self.assertRaisesRegex(ParseError, "already creates display math"):
+            parse(r"= {{s1.2|\(E_{\mathrm{FNV}}=E_{\mathrm{PC}}-q\Delta V\)}}")
+
+    def test_display_equation_cannot_cross_source_links(self):
+        with self.assertRaisesRegex(ParseError, "cannot cross source links"):
+            parse(
+                r"= {{s1.2|E_{\mathrm{FNV}}=E_{\mathrm{PC}}-q\Delta V}} "
+                r"{{s1.3|=[1-\alpha(r)]E_{\mathrm{PC}}}}"
+            )
+
+    def test_inline_tex_requires_inline_delimiters(self):
+        with self.assertRaisesRegex(ParseError, "outside math delimiters"):
+            parse(r"{{s1.2|欠陥電荷密度 (\rho_d)}}")
 
     def test_unlinked_equation_is_reported(self):
         blocks, _ = parse(r"= E_0 = \frac{1}{2}kQ^2")
@@ -215,7 +273,7 @@ class CrossPlatformEntryPointTests(unittest.TestCase):
     def test_launcher_runs_without_pythonpath_from_an_unrelated_cwd(self):
         proc = self._run("--version")
         self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", "replace"))
-        self.assertIn("pdfx", proc.stdout.decode("utf-8", "replace"))
+        self.assertIn("pdfx 0.4.2", proc.stdout.decode("utf-8", "replace"))
 
     def test_unicode_output_survives_a_non_utf8_console(self):
         # A Japanese Windows console reports cp932, which cannot encode U+2080.
@@ -239,7 +297,6 @@ class FramedHostTests(unittest.TestCase):
     SecurityError, and a fragment link that escapes is treated as navigating
     away from the reply rather than moving within the document.
     """
-
     def setUp(self):
         self.js = (ASSETS / "explainer.js").read_text(encoding="utf-8")
         self.lines = self.js.splitlines()
