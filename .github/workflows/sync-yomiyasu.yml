@@ -1,0 +1,59 @@
+name: Sync yomiyasu
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-yomiyasu
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Sync latest released yomiyasu skill
+        run: python scripts/sync-yomiyasu.py
+      - name: Validate marketplace
+        run: ./scripts/validate-marketplace.sh
+      - name: Validate vendored Python syntax
+        run: python -m compileall -q plugins/thesis-summarizer/skills/thesis-summarizer/vendor/yomiyasu/scripts
+      - name: Open or update sync pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "Already up to date."
+            exit 0
+          fi
+
+          version=$(python -c 'import json; print(json.load(open("plugins/thesis-summarizer/skills/thesis-summarizer/vendor/yomiyasu/UPSTREAM.json"))["release"])')
+          branch=automation/sync-yomiyasu
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git checkout -B "$branch"
+          git add \
+            plugins/thesis-summarizer/.codex-plugin/plugin.json \
+            plugins/thesis-summarizer/.claude-plugin/plugin.json \
+            plugins/thesis-summarizer/skills/thesis-summarizer/scripts/pdfx/__init__.py \
+            plugins/thesis-summarizer/skills/thesis-summarizer/scripts/tests/test_math_and_links.py \
+            plugins/thesis-summarizer/skills/thesis-summarizer/vendor/yomiyasu
+          git commit -m "Sync yomiyasu ${version}"
+          git push --force-with-lease origin "$branch"
+
+          if gh pr view "$branch" >/dev/null 2>&1; then
+            gh pr edit "$branch" --title "Sync yomiyasu ${version}" --body "Automated update from nanaism/yomiyasu. Review the upstream changes and merge to publish them with Thesis Summarizer."
+          else
+            gh pr create --base main --head "$branch" --title "Sync yomiyasu ${version}" --body "Automated update from nanaism/yomiyasu. Review the upstream changes and merge to publish them with Thesis Summarizer."
+          fi

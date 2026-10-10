@@ -14,10 +14,25 @@ differ.
   - `.codex-plugin/plugin.json`: manifest read by ChatGPT / Codex
   - `.claude-plugin/plugin.json`: manifest read by Claude Code
   - `skills/thesis-summarizer/`: the shared skill, read by both
+- `scripts/sync-yomiyasu.py`: vendors the latest released yomiyasu skill
 - `scripts/validate-marketplace.sh`: local and CI validation for both catalogs
 
 Generated HTML, input PDFs, screenshots, credentials, and other user data do
 not belong in this repository.
+
+## Yomiyasu integration
+
+Thesis Summarizer applies a compact yomiyasu editorial pass to `content.md`
+and runs the upstream static linter before building the explainer. Source IDs,
+evidence boundaries, equations, and authoring directives remain under the
+stricter Thesis Summarizer rules.
+
+The complete MIT-licensed upstream skill is vendored under
+`skills/thesis-summarizer/vendor/yomiyasu/`. A daily GitHub Actions job checks
+the latest `nanaism/yomiyasu` release and opens or updates a synchronization
+pull request when it changes. Merging that reviewed PR publishes the new rules
+and linter with an automatically incremented plugin patch version; no network
+access is needed while generating an explainer.
 
 ## Install in Claude Code
 

@@ -111,6 +111,12 @@ Every lexical part of ordinary prose, leads, notes, derivations, equations, and
 captions must be linked. Headings, box titles, punctuation, and layout-only HTML
 may remain unlinked.
 
+Before building, apply the bundled yomiyasu editorial pass described in
+[references/yomiyasu.md](references/yomiyasu.md). It improves the visible
+Japanese without changing source IDs, evidence boundaries, technical meaning,
+TeX, or authoring directives. Run its static linter and review the findings;
+warnings are prompts for judgment, not requirements to rewrite sound prose.
+
 ### 4. Build
 
 ```text
