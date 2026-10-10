@@ -9,7 +9,7 @@ from PIL import Image
 
 from pdfx.mathml import MathSyntaxError, output_math_residue, render_inline_math, render_math
 from pdfx.parse import ParseError, parse
-from pdfx.render import ASSETS, body_html
+from pdfx.render import ASSETS, body_html, write
 from pdfx.sources import page_units
 from pdfx.verify import media_contact_sheet
 
@@ -121,6 +121,37 @@ class LinkCoverageTests(unittest.TestCase):
     def test_unlinked_equation_is_reported(self):
         blocks, _ = parse(r"= E_0 = \frac{1}{2}kQ^2")
         self.assertTrue(blocks[0].link_gaps)
+
+    def test_empty_display_equation_is_rejected(self):
+        with self.assertRaisesRegex(ParseError, "no TeX source"):
+            parse("= {{s1.2|}}")
+
+
+class LatexCopyTests(unittest.TestCase):
+    def test_generated_equation_keeps_one_pdf_link_and_tex_annotation(self):
+        blocks, spans = parse(r"= {{s1.2|E_0=\frac{1}{2}kQ^2}}")
+        with TemporaryDirectory() as directory:
+            wd = Path(directory)
+            (wd / "pages").mkdir()
+            (wd / "out").mkdir()
+            Image.new("RGB", (100, 100), "white").save(wd / "pages" / "p01.png")
+            output = write(directory, blocks, [{"id": spans[0].id, "page": 0,
+                                                "rects": [[10, 20, 30, 5]]}])
+            rendered = output.read_text(encoding="utf-8")
+        self.assertEqual(rendered.count('class="eq"'), 1)
+        self.assertEqual(rendered.count('class="a"'), 1)
+        self.assertEqual(rendered.count('class="hl"'), 1)
+        self.assertIn('<annotation encoding="application/x-tex">'
+                      'E_0=\\frac{1}{2}kQ^2</annotation>', rendered)
+        self.assertIn('document.querySelectorAll(\'.eq math\')', rendered)
+        self.assertIn('aria-label\',\'この数式をLaTeX形式でコピー', rendered)
+
+    def test_copy_control_overlays_equation_without_moving_it(self):
+        css = (ASSETS / "explainer.css").read_text(encoding="utf-8")
+        self.assertIn('.eq.has-latex-copy{position:relative}', css)
+        self.assertIn('.latex-copy-btn{position:absolute;top:6px;right:7px;', css)
+        self.assertIn('opacity:0;pointer-events:none', css)
+        self.assertNotIn('padding-top:42px', css)
 
 
 class MediaTests(unittest.TestCase):
@@ -273,7 +304,7 @@ class CrossPlatformEntryPointTests(unittest.TestCase):
     def test_launcher_runs_without_pythonpath_from_an_unrelated_cwd(self):
         proc = self._run("--version")
         self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", "replace"))
-        self.assertIn("pdfx 0.5.1", proc.stdout.decode("utf-8", "replace"))
+        self.assertIn("pdfx 0.5.2", proc.stdout.decode("utf-8", "replace"))
 
     def test_unicode_output_survives_a_non_utf8_console(self):
         # A Japanese Windows console reports cp932, which cannot encode U+2080.

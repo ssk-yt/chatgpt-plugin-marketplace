@@ -1,7 +1,7 @@
 {
   "name": "thesis-summarizer",
   "displayName": "Thesis Summarizer",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Turn theses and research papers into self-contained, bidirectionally linked explainers.",
   "author": {
     "name": "ssk-yt"

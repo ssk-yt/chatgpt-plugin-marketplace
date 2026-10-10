@@ -367,11 +367,15 @@ def _eq_lines(text: str, start_line: int = 1) -> str:
             if tokens and tokens[0].source_id:
                 token = tokens[0]
                 visible = token.visible
+                if not visible:
+                    raise ParseError(f"content.md:{line}: display equation has no TeX source")
                 _reject_display_delimiters(visible, line)
                 expression = f"{{{{{token.source_id}|\\({visible}\\)}}}}"
             elif tokens:
                 token = tokens[0]
                 visible = token.visible
+                if not visible:
+                    raise ParseError(f"content.md:{line}: display equation has no TeX source")
                 _reject_display_delimiters(visible, line)
                 expression = (f"{{{{{token.selector}|{PHRASE_SEP.join(token.phrases)}|"
                               f"\\({visible}\\)}}}}")

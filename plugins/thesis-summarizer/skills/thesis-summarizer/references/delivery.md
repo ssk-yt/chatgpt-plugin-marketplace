@@ -14,6 +14,7 @@ Before delivery, confirm that the generated HTML contains:
 - mobile navigation to `#pdf-pane`;
 - explanation links using `a.a`;
 - PDF overlays using `a.hl`;
+- display equations with MathML TeX annotations and the bundled LaTeX copy control;
 - the expected figure and table media.
 
 If an expected element is absent, rebuild with the current bundled scripts.

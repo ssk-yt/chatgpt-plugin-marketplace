@@ -17,6 +17,65 @@
   let glideFrame=0;
   let mobileFrame=0;
 
+  function installLatexCopy(){
+    const equations=[...document.querySelectorAll('.eq math')];
+    if(!equations.length)return;
+    const toast=document.createElement('div');
+    toast.className='latex-copy-toast';
+    toast.setAttribute('role','status');
+    toast.setAttribute('aria-live','polite');
+    document.body.append(toast);
+    let toastTimer=0;
+    function showToast(message){
+      clearTimeout(toastTimer);
+      toast.textContent=message;
+      toast.classList.add('visible');
+      toastTimer=setTimeout(()=>toast.classList.remove('visible'),1800);
+    }
+    function copyFallback(value){
+      const field=document.createElement('textarea');
+      field.value=value;
+      field.setAttribute('readonly','');
+      field.style.cssText='position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.append(field);
+      field.select();
+      try{return document.execCommand('copy');}
+      finally{field.remove();}
+    }
+    async function copyLatex(value){
+      if(navigator.clipboard?.writeText){
+        try{await navigator.clipboard.writeText(value);return true;}
+        catch(err){/* file:// and embedded hosts may deny Clipboard API */}
+      }
+      return copyFallback(value);
+    }
+    equations.forEach(math=>{
+      const container=math.closest('.eq');
+      if(!container||container.classList.contains('has-latex-copy'))return;
+      const tex=math.querySelector('annotation[encoding="application/x-tex"]')?.textContent?.trim()
+        ||math.getAttribute('aria-label')?.trim();
+      if(!tex)return;
+      const button=document.createElement('button');
+      button.className='latex-copy-btn';
+      button.type='button';
+      button.setAttribute('aria-label','この数式をLaTeX形式でコピー');
+      button.title='LaTeXをコピー';
+      button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>';
+      button.addEventListener('click',async event=>{
+        event.preventDefault();
+        event.stopPropagation();
+        try{
+          if(!await copyLatex(tex))throw new Error('copy failed');
+          button.classList.add('copied');
+          showToast('LaTeXをコピーしました');
+          setTimeout(()=>button.classList.remove('copied'),1800);
+        }catch(err){showToast('LaTeXをコピーできませんでした');}
+      });
+      container.classList.add('has-latex-copy');
+      container.append(button);
+    });
+  }
+
   const reducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const isMobile=()=>window.matchMedia('(max-width:900px)').matches;
   function setMobileState(pane){
@@ -113,6 +172,7 @@
   }
 
   hydrateHighlights();
+  installLatexCopy();
   proseLinks.forEach(link=>{
     const activate=()=>{
       const anchor=byId[link.dataset.anchor];
