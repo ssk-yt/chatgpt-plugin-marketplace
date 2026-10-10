@@ -59,7 +59,14 @@ environment prefixes; they differ between POSIX shells and PowerShell.
 
 ## Workflow
 
-### 1. Extract and read the complete paper
+### 1. Obtain the attached PDF
+
+Before running `pdfx`, make the PDF available as a readable file in the
+execution environment. If an attachment is not directly readable, follow
+[references/input.md](references/input.md). A failed download attempt alone
+does not establish that the attachment is unavailable.
+
+### 2. Extract and read the complete paper
 
 ```text
 pdfx init paper.pdf -o work/
@@ -71,7 +78,7 @@ coordinate-addressable units such as `[s3.12]`. Preserve whole-paper coverage;
 do not replace it with selective retrieval. Expect OCR noise, damaged ligatures,
 and line-break artifacts in older PDFs.
 
-### 2. Use the default explanation profile
+### 3. Use the default explanation profile
 
 Unless the user requests otherwise:
 
@@ -86,7 +93,7 @@ Unless the user requests otherwise:
 Do not ask the user to choose language, depth, or coverage. Ask only when the
 source is missing, unreadable, or the requirements conflict materially.
 
-### 3. Write `work/content.md`
+### 4. Write `work/content.md`
 
 Read [references/authoring.md](references/authoring.md) and the mandatory
 [references/math.md](references/math.md), then write the complete explainer.
@@ -117,7 +124,7 @@ Japanese without changing source IDs, evidence boundaries, technical meaning,
 TeX, or authoring directives. Run its static linter and review the findings;
 warnings are prompts for judgment, not requirements to rewrite sound prose.
 
-### 4. Build
+### 5. Build
 
 ```text
 pdfx build work/
@@ -129,7 +136,7 @@ or extraction problems require diagnosis, read
 [references/troubleshooting.md](references/troubleshooting.md). Never ship with
 `--allow-missing`.
 
-### 5. Verify
+### 6. Verify
 
 Read [references/quality.md](references/quality.md), then run:
 
@@ -143,7 +150,7 @@ short claim is supported by its highlighted source unit, and each figure/table
 crop contains only the media plus its original caption. Treat every `MATH`
 diagnostic as a blocking error.
 
-### 6. Deliver
+### 7. Deliver
 
 Deliver `work/out/explainer.html` under a descriptive filename. It is
 self-contained and includes the PDF pages. Do not publish a copyrighted PDF to

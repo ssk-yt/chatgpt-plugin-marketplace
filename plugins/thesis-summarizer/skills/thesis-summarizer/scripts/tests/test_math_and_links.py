@@ -273,7 +273,7 @@ class CrossPlatformEntryPointTests(unittest.TestCase):
     def test_launcher_runs_without_pythonpath_from_an_unrelated_cwd(self):
         proc = self._run("--version")
         self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", "replace"))
-        self.assertIn("pdfx 0.5.0", proc.stdout.decode("utf-8", "replace"))
+        self.assertIn("pdfx 0.5.1", proc.stdout.decode("utf-8", "replace"))
 
     def test_unicode_output_survives_a_non_utf8_console(self):
         # A Japanese Windows console reports cp932, which cannot encode U+2080.
