@@ -14,3 +14,5 @@ only its PDF counterpart.
 Keep tabs, prose links, and PDF overlays as real fragment links so core
 navigation survives previews that disable JavaScript. JavaScript may enhance
 scrolling, zoom, and swipe behavior but must not be the only navigation path.
+Page images and figure/table crops share one embedded image per page through
+CSS; keep crops visible when JavaScript is disabled.

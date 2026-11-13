@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 
 from PIL import Image
 
+from pdfx import __version__
 from pdfx.mathml import MathSyntaxError, output_math_residue, render_inline_math, render_math
 from pdfx.parse import ParseError, parse
 from pdfx.render import ASSETS, body_html, write
@@ -194,8 +195,8 @@ class MediaTests(unittest.TestCase):
                 ":::"
             )
 
-    def test_media_is_embedded_as_data_uri(self):
-        blocks, _ = parse(
+    def test_media_reuses_one_page_image_instead_of_embedding_a_second_crop(self):
+        blocks, spans = parse(
             ":::media table\n"
             "@crop p1 10 10 60 70\n"
             "{{p1|Table 1. Results.|表1　結果}}\n"
@@ -205,9 +206,14 @@ class MediaTests(unittest.TestCase):
             pages = Path(directory) / "pages"
             pages.mkdir()
             Image.new("RGB", (100, 100), "white").save(pages / "p01.png")
-            rendered = body_html(blocks, Path(directory))
+            (Path(directory) / "out").mkdir()
+            rendered = write(directory, blocks, [{"id": spans[0].id, "page": 0,
+                                                 "rects": [[10, 10, 60, 70]]}]).read_text()
         self.assertIn('class="media-card media-table"', rendered)
-        self.assertIn("data:image/png;base64,", rendered)
+        self.assertEqual(rendered.count("data:image/"), 1)
+        self.assertIn('class="media-crop page-image-0" role="img"', rendered)
+        self.assertIn('aspect-ratio:60/70;background-size:166.66667% 142.85714%', rendered)
+        self.assertIn('.page-image-0{background-image:url("data:image/', rendered)
         self.assertIn('href="#source-a001-1"', rendered)
 
     def test_media_review_sheet_is_generated(self):
@@ -304,7 +310,7 @@ class CrossPlatformEntryPointTests(unittest.TestCase):
     def test_launcher_runs_without_pythonpath_from_an_unrelated_cwd(self):
         proc = self._run("--version")
         self.assertEqual(proc.returncode, 0, proc.stderr.decode("utf-8", "replace"))
-        self.assertIn("pdfx 0.5.2", proc.stdout.decode("utf-8", "replace"))
+        self.assertIn(f"pdfx {__version__}", proc.stdout.decode("utf-8", "replace"))
 
     def test_unicode_output_survives_a_non_utf8_console(self):
         # A Japanese Windows console reports cp932, which cannot encode U+2080.

@@ -15,7 +15,8 @@ Before delivery, confirm that the generated HTML contains:
 - explanation links using `a.a`;
 - PDF overlays using `a.hl`;
 - display equations with MathML TeX annotations and the bundled LaTeX copy control;
-- the expected figure and table media.
+- the expected figure and table media, with a page image definition for each
+  `page-image-N` crop class.
 
 If an expected element is absent, rebuild with the current bundled scripts.
 Previously generated HTML files are not updated when the plugin is upgraded.

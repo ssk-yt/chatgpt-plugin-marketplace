@@ -60,7 +60,10 @@ so its single source anchor contains the TeX body without another delimiter.
 Display expressions cannot span anchors. Unknown commands, unbraced signed
 scripts such as `^-5`, and visible TeX residue outside MathML stop the build.
 
-PDF page crops use page-relative percentages and are embedded into the output.
+PDF page crops use page-relative percentages. The output embeds each page image
+once, choosing the smaller of its PNG and a high-quality WebP encoding. Figure
+and table crops reuse that image through CSS rather than duplicating its bytes;
+the crop and the original page remain visible without JavaScript.
 Each crop must contain only the figure or table and its caption, without body
 prose, equations, headers, footers, or neighboring media:
 
