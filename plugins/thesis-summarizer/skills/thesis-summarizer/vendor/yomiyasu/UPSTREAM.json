@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/nanaism/yomiyasu",
-  "release": "v1.1.1",
-  "commit": "373356eb874af5184962c88e925ea7eb58450318",
+  "release": "v3.1.0",
+  "commit": "db78b9bc5e868549b517a037df7a4d1c93edac23",
   "update_policy": "Synced by .github/workflows/sync-yomiyasu.yml"
 }
