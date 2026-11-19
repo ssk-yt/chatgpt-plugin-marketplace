@@ -1,4 +1,4 @@
-// PDF.js viewer for the experimental self-contained HTML output.
+// PDF.js viewer for the self-contained HTML output.
 const rightPane = document.querySelector('.col-right');
 const pageNodes = [...document.querySelectorAll('.pdfpage[data-page]')];
 const cropNodes = [...document.querySelectorAll('.pdfjs-crop[data-page][data-crop]')];
@@ -39,6 +39,117 @@ async function start() {
   const pdf = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
 
   const pageJobs = new Map();
+  const textLayers = new Map();
+  const textViewport = new Map();
+  const nearPages = new Set();
+  const deferredUnload = new Set();
+  let selectingText = false;
+  const resizeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const pageNode = entry.target.closest('.pdfpage');
+        const viewport = textViewport.get(pageNode);
+        if (viewport) updateTextScale(pageNode, viewport);
+      }
+    }) : null;
+
+  function updateTextScale(pageNode, viewport) {
+    const surface = pageNode.querySelector('.page-surface');
+    const width = surface.clientWidth;
+    if (width > 0) {
+      surface.style.setProperty('--total-scale-factor', width / viewport.rawDims.pageWidth);
+    }
+  }
+
+  function activateSourceFromText(event) {
+    if (!event.target.closest('.pdfjs-text-layer span')) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    const pageNode = event.currentTarget.closest('.pdfpage');
+    const hit = [...pageNode.querySelectorAll('.hl')].find(link => {
+      const bounds = link.getBoundingClientRect();
+      return event.clientX >= bounds.left && event.clientX <= bounds.right
+        && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+    });
+    if (hit) {
+      event.preventDefault();
+      event.stopPropagation();
+      hit.click();
+    }
+  }
+
+  async function showTextLayer(pageNode) {
+    if (textLayers.has(pageNode)) return;
+    const state = { cancelled: false, layer: null, container: null };
+    textLayers.set(pageNode, state);
+    try {
+      if (!await renderPage(pageNode) || state.cancelled) return;
+      const page = await pdf.getPage(Number(pageNode.dataset.page) + 1);
+      if (state.cancelled) return;
+      const viewport = page.getViewport({ scale: 1 });
+      const surface = pageNode.querySelector('.page-surface');
+      const container = document.createElement('div');
+      container.className = 'textLayer pdfjs-text-layer';
+      container.setAttribute('aria-label', `原文PDF ${Number(pageNode.dataset.page) + 1}ページの選択可能な本文`);
+      state.container = container;
+      surface.append(container);
+      updateTextScale(pageNode, viewport);
+      textViewport.set(pageNode, viewport);
+      resizeObserver?.observe(surface);
+      const layer = new pdfjs.TextLayer({
+        textContentSource: page.streamTextContent(), container, viewport,
+      });
+      state.layer = layer;
+      container.addEventListener('click', activateSourceFromText);
+      await layer.render();
+      if (state.cancelled) return;
+      pageNode.dataset.textState = 'ready';
+    } catch (error) {
+      if (!state.cancelled) {
+        pageNode.dataset.textState = 'error';
+        showError(`原文の文字選択を有効にできませんでした: ${error.message}`, pageNode);
+      }
+    }
+  }
+
+  function hideTextLayer(pageNode) {
+    const state = textLayers.get(pageNode);
+    if (!state) return;
+    const selection = window.getSelection();
+    if (selectingText || (selection && !selection.isCollapsed && selection.rangeCount
+        && state.container && selection.getRangeAt(0).intersectsNode(state.container))) {
+      deferredUnload.add(pageNode);
+      return;
+    }
+    state.cancelled = true;
+    state.layer?.cancel();
+    state.container?.remove();
+    textLayers.delete(pageNode);
+    textViewport.delete(pageNode);
+    resizeObserver?.unobserve(pageNode.querySelector('.page-surface'));
+    deferredUnload.delete(pageNode);
+    delete pageNode.dataset.textState;
+  }
+
+  function flushDeferredUnload() {
+    for (const pageNode of deferredUnload) {
+      if (nearPages.has(pageNode)) deferredUnload.delete(pageNode);
+      else hideTextLayer(pageNode);
+    }
+  }
+  document.addEventListener('pointerdown', event => {
+    if (event.target.closest?.('.pdfjs-text-layer span')) selectingText = true;
+  });
+  for (const eventName of ['pointerup', 'pointercancel']) {
+    window.addEventListener(eventName, () => {
+      selectingText = false;
+      flushDeferredUnload();
+    });
+  }
+  document.addEventListener('selectionchange', () => {
+    if (!selectingText) flushDeferredUnload();
+  });
+
   function renderPage(pageNode) {
     if (pageJobs.has(pageNode)) return pageJobs.get(pageNode);
     const job = (async () => {
@@ -104,8 +215,21 @@ async function start() {
       }
     }, { root: rightPane, rootMargin: '900px 0px' });
     pageNodes.forEach(node => observer.observe(node));
+    const textObserver = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          nearPages.add(entry.target);
+          deferredUnload.delete(entry.target);
+          void showTextLayer(entry.target);
+        } else {
+          nearPages.delete(entry.target);
+          hideTextLayer(entry.target);
+        }
+      }
+    }, { root: rightPane, rootMargin: '300px 0px' });
+    pageNodes.forEach(node => textObserver.observe(node));
   } else {
-    pageNodes.forEach(node => void renderPage(node));
+    pageNodes.forEach(node => void showTextLayer(node));
   }
   cropNodes.forEach(crop => void renderCrop(crop));
 }

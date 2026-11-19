@@ -20,9 +20,12 @@ CSS; keep crops visible when JavaScript is disabled.
 PDF.js is the default for newly initialized work directories. It uses the
 bundled PDF.js 5.4.54 for text rectangles and
 browser rendering, without PDFium or Pillow. Figure/table crops are drawn
-from the PDF.js page canvas. This route requires browser JavaScript and has no
+from the PDF.js page canvas. Selectable text layers are created only near the
+visible pages; text selection must not trigger a source link. This route
+requires browser JavaScript and has no
 static page-image fallback. Check each source highlight and crop in the
-intended preview host before delivery.
+intended preview host before delivery, and verify that source text can be
+selected while a plain click on highlighted text still returns to the prose.
 
 `pdfx build work/ --viewer pdfjs` on a PDFium-initialized directory changes
 only the viewer. It retains low-resolution page previews and static crop
