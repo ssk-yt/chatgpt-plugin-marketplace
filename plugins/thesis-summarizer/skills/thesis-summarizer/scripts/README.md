@@ -89,10 +89,7 @@ It does not require `pypdfium2`, Pillow, or a package download. The HTML
 embeds the original PDF and PDF.js modules, then renders pages and figure/table
 crops in the browser. This full route needs browser JavaScript, `DecompressionStream`,
 and blob module URLs. `verify` checks text/link coverage but cannot make image
-contact sheets; inspect the generated crops in the HTML preview. The viewer
-creates selectable PDF.js text only for pages near the visible PDF pane and
-removes offscreen text layers. Dragging selects source text; a click on a
-highlighted source still jumps to the matching explanation.
+contact sheets; inspect the generated crops in the HTML preview.
 
 The separate `build --viewer pdfjs` option on a PDFium-initialized directory
 changes only the viewer. It retains small static page previews and embedded

@@ -64,14 +64,7 @@ canvas.media-crop{height:auto}
 .pdfpage{position:relative;width:100%;margin:0 auto 14px;background:#fff;box-shadow:0 5px 18px rgba(40,34,24,.18)}
 .page-surface{display:block;width:100%;background-color:#fff;background-repeat:no-repeat;background-size:100% 100%;user-select:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 .pdfjs-surface canvas{display:block;width:100%;height:100%}
-.pdfjs-surface{position:relative;user-select:text;-webkit-user-select:text}
-.pdfjs-text-layer{position:absolute;inset:0;z-index:4;overflow:clip;line-height:1;text-align:initial;text-size-adjust:none;forced-color-adjust:none;pointer-events:none;user-select:text;-webkit-user-select:text}
-.pdfjs-text-layer :is(span,br){position:absolute;color:transparent;white-space:pre;transform-origin:0 0}
-.pdfjs-text-layer span{cursor:text;pointer-events:auto;user-select:text;-webkit-user-select:text}
-.pdfjs-text-layer span.markedContent{top:0;height:0;pointer-events:none}
-.pdfjs-text-layer span.markedContent span{pointer-events:auto}
-.pdfjs-text-layer span[role="img"]{cursor:default;user-select:none;-webkit-user-select:none}
-.pdfjs-text-layer ::selection{background:rgba(var(--highlight-rgb),.42)}
+.pdfjs-surface{position:relative}
 .pdfjs-loading{position:absolute;top:50%;left:0;width:100%;transform:translateY(-50%);color:#777;font-size:12px;text-align:center}
 .pdfpage[data-render-state="ready"] .pdfjs-loading{display:none}
 .pdfjs-error{margin:0;padding:12px;color:#8d342d;font-size:12px;text-align:left}

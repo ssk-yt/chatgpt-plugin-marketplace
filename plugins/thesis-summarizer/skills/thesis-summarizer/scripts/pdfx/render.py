@@ -238,7 +238,7 @@ def write(workdir: str, blocks, anchors: list[dict], *, title: str | None = None
                 page_css.append(f'.page-preview-{i}{{background-image:url("{preview}")}}')
                 preview_class = f" page-preview-{i}"
                 loading_text = ""
-            surface = (f'<div class="page-surface pdfjs-surface{preview_class}" role="group" '
+            surface = (f'<div class="page-surface pdfjs-surface{preview_class}" role="img" '
                        f'aria-label="原文PDF {i+1}ページ" style="aspect-ratio:{width}/{height}">'
                        f'{loading_text}</div>')
         overlays = "".join(overlays_by_page.get(i, []))

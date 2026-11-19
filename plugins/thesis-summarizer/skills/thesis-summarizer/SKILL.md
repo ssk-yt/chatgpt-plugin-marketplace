@@ -47,9 +47,7 @@ environment prefixes; they differ between POSIX shells and PowerShell.
 The default PDF.js backend needs Node.js and the bundled PDF.js files; it does
 not install Python PDF packages. Check the generated HTML in the intended
 preview host because PDF.js renders pages and figure crops in browser
-JavaScript. Check that PDF text can be selected by dragging and that clicking
-a highlighted source still returns to the explanation. If the host cannot
-run it, `--backend pdfium` is the fallback.
+JavaScript. If the host cannot run it, `--backend pdfium` is the fallback.
 
 The PDFium fallback needs `pypdfium2` and Pillow. If either package is missing:
 
