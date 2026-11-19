@@ -29,10 +29,12 @@ def _utf8_io():
 
 def cmd_init(a):
     from .extract import init
-    meta = init(a.pdf, a.out, dpi=a.dpi, force=a.force)
-    print(f"{meta['pages']} pages @ {a.dpi} dpi -> {a.out}/")
+    meta = init(a.pdf, a.out, dpi=a.dpi, force=a.force, backend=a.backend)
+    label = f"@ {a.dpi} dpi" if a.backend == "pdfium" else "with PDF.js"
+    print(f"{meta['pages']} pages {label} -> {a.out}/")
     print(f"  text/    extracted text layer (read this before writing prose)")
-    print(f"  pages/   cached page images")
+    if a.backend == "pdfium":
+        print(f"  pages/   cached page images")
     print(f"  content.md   <- write the explainer here")
     return 0
 
@@ -138,10 +140,15 @@ def _validate_pages(doc, blocks, spans):
 
 def cmd_build(a):
     from .anchors import Doc
+    from .extract import load_meta
     from .parse import parse
     from . import render
 
     wd = Path(a.workdir)
+    backend = load_meta(a.workdir).get("backend", "pdfium")
+    viewer = a.viewer or ("pdfjs" if backend == "pdfjs" else "raster")
+    if backend == "pdfjs" and viewer != "pdfjs":
+        raise SystemExit("PDF.js extraction requires the PDF.js viewer")
     src = (wd / "content.md").read_text(encoding="utf-8")
     blocks, spans = parse(src)
     if _report_link_gaps(blocks):
@@ -177,7 +184,7 @@ def cmd_build(a):
         pages_used = {sp.page for sp in spans}
         pages_used.update(item.page for block in blocks for item in block.media)
     out = render.write(a.workdir, blocks, anchors, title=a.title,
-                       pages_used=pages_used, viewer=a.viewer)
+                       pages_used=pages_used, viewer=viewer)
     (wd / "out" / "anchors.json").write_text(
         json.dumps([{**an, "text": sp.text, "source_id": sp.source_id,
                      "phrases": sp.phrases, "line": sp.line}
@@ -192,6 +199,7 @@ def cmd_build(a):
 
 def cmd_verify(a):
     from .anchors import Doc
+    from .extract import load_meta
     from .parse import parse
     from . import verify as V
 
@@ -204,7 +212,8 @@ def cmd_verify(a):
     anchors, problems = _resolve_all(doc, spans)
     by_id = {x["id"]: x for x in anchors}
     rows = V.coverage(spans, by_id, doc)
-    media_sheet = V.media_contact_sheet(a.workdir, blocks)
+    backend = load_meta(a.workdir).get("backend", "pdfium")
+    media_sheet = V.media_contact_sheet(a.workdir, blocks) if backend != "pdfjs" else None
     if _report_math_residue(wd / "out" / "explainer.html"):
         return 1
 
@@ -225,7 +234,7 @@ def cmd_verify(a):
         step = max(1, len(target) // a.sample)
         target = target[::step][:a.sample]
 
-    if not a.no_sheets:
+    if not a.no_sheets and backend != "pdfjs":
         sheets = V.contact_sheets(a.workdir, target, per_sheet=a.per_sheet)
         print(f"\n{len(sheets)} contact sheet(s) covering {len(target)} anchors:")
         for s in sheets:
@@ -237,6 +246,8 @@ def cmd_verify(a):
         print(f"\nmedia crop review sheet:\n  {media_sheet}")
         print("Confirm that every tile contains only the figure or table and its caption; "
               "body prose, equations, headers, and footers must be absent.")
+    elif backend == "pdfjs" and any(block.media for block in blocks):
+        print("PDF.js media crops render in the browser; inspect each crop in the HTML preview.")
     return 0
 
 
@@ -251,6 +262,8 @@ def main(argv=None):
     q.add_argument("-o", "--out", required=True, help="work directory to create")
     q.add_argument("--dpi", type=int, default=165)
     q.add_argument("--force", action="store_true", help="re-render cached page images")
+    q.add_argument("--backend", choices=("pdfium", "pdfjs"), default="pdfjs",
+                   help="PDF extraction backend (pdfjs needs Node.js, not Python PDF packages)")
     q.set_defaults(fn=cmd_init)
 
     q = sub.add_parser("text", help="print the extracted text layer")
@@ -272,7 +285,7 @@ def main(argv=None):
     q.add_argument("--allow-missing", action="store_true")
     q.add_argument("--only-used-pages", action="store_true",
                    help="embed only pages an anchor points at (smaller file)")
-    q.add_argument("--viewer", choices=("raster", "pdfjs"), default="raster",
+    q.add_argument("--viewer", choices=("raster", "pdfjs"),
                    help="PDF display backend (pdfjs is experimental)")
     q.set_defaults(fn=cmd_build)
 

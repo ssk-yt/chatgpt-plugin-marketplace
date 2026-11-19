@@ -1,6 +1,6 @@
 """PDF -> per-page text + cached page images."""
 from __future__ import annotations
-import json, os
+import json, os, subprocess
 from pathlib import Path
 
 SKELETON = """\
@@ -24,7 +24,24 @@ SKELETON = """\
 """
 
 
-def init(pdf_path: str, workdir: str, dpi: int = 165, force: bool = False) -> dict:
+def init(pdf_path: str, workdir: str, dpi: int = 165, force: bool = False,
+         backend: str = "pdfjs") -> dict:
+    if backend == "pdfjs":
+        script = Path(__file__).parent / "assets" / "pdfjs-extract.mjs"
+        try:
+            subprocess.run(["node", str(script), os.path.abspath(pdf_path),
+                            os.path.abspath(workdir)], check=True)
+        except FileNotFoundError as error:
+            raise SystemExit("PDF.js extraction needs Node.js on PATH") from error
+        except subprocess.CalledProcessError as error:
+            raise SystemExit(f"PDF.js extraction failed (exit {error.returncode})") from error
+        meta = load_meta(workdir)
+        content = Path(workdir) / "content.md"
+        if not content.exists():
+            content.write_text(SKELETON, encoding="utf-8")
+        return meta
+    if backend != "pdfium":
+        raise ValueError(f"unsupported PDF backend: {backend}")
     import pypdfium2 as pdfium
 
     wd = Path(workdir)
@@ -52,6 +69,7 @@ def init(pdf_path: str, workdir: str, dpi: int = 165, force: bool = False) -> di
 
     meta = {
         "pdf": os.path.abspath(pdf_path),
+        "backend": "pdfium",
         "dpi": dpi,
         "pages": n,
         "sizes": sizes,

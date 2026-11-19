@@ -52,6 +52,8 @@ math{font-family:"STIX Two Math","Cambria Math","Times New Roman",serif}
 .media-figure{width:80%}
 .media-table{width:60%}
 .media-crop{display:block;width:100%;border:1px solid rgba(72,64,50,.16);background-color:#fff;background-repeat:no-repeat;box-shadow:0 3px 12px rgba(40,34,24,.1);print-color-adjust:exact;-webkit-print-color-adjust:exact}
+img.media-crop{height:auto}
+canvas.media-crop{height:auto}
 .media-jump{display:block;border-radius:3px;color:inherit;text-decoration:none}
 .media-jump:hover .media-crop{border-color:rgba(166,70,50,.48);box-shadow:0 4px 15px rgba(40,34,24,.16)}
 .media-jump:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
@@ -62,6 +64,9 @@ math{font-family:"STIX Two Math","Cambria Math","Times New Roman",serif}
 .pdfpage{position:relative;width:100%;margin:0 auto 14px;background:#fff;box-shadow:0 5px 18px rgba(40,34,24,.18)}
 .page-surface{display:block;width:100%;background-color:#fff;background-repeat:no-repeat;background-size:100% 100%;user-select:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 .pdfjs-surface canvas{display:block;width:100%;height:100%}
+.pdfjs-surface{position:relative}
+.pdfjs-loading{position:absolute;top:50%;left:0;width:100%;transform:translateY(-50%);color:#777;font-size:12px;text-align:center}
+.pdfpage[data-render-state="ready"] .pdfjs-loading{display:none}
 .pdfjs-error{margin:0;padding:12px;color:#8d342d;font-size:12px;text-align:left}
 .pdfpage .pnum{position:absolute;top:5px;left:5px;z-index:2;padding:1px 6px;border-radius:3px;background:rgba(0,0,0,.5);color:#fff;font:11px/1.5 "SFMono-Regular",Menlo,Consolas,monospace;pointer-events:none}
 .hl{position:absolute;z-index:3;margin:0;padding:0;border:0;border-radius:2px;background:rgba(var(--highlight-rgb),.08);color:transparent;cursor:pointer;box-shadow:none;transition:background-color .16s ease}

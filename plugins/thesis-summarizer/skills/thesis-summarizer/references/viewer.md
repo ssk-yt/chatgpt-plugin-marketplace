@@ -17,10 +17,13 @@ scrolling, zoom, and swipe behavior but must not be the only navigation path.
 Page images and figure/table crops share one embedded image per page through
 CSS; keep crops visible when JavaScript is disabled.
 
-`pdfx build work/ --viewer pdfjs` is an opt-in experiment. It embeds PDF.js
-5.4.54 and the original PDF, draws full-resolution pages on demand, and keeps
-low-resolution page previews for hosts that block modules. Figure/table crops
-remain ordinary embedded images. Source links and highlight geometry are the
-same as in the raster viewer. The generator still uses PDFium/Pillow; compare
-link positions and crop display in the intended preview host before using this
-mode for delivery.
+PDF.js is the default for newly initialized work directories. It uses the
+bundled PDF.js 5.4.54 for text rectangles and
+browser rendering, without PDFium or Pillow. Figure/table crops are drawn
+from the PDF.js page canvas. This route requires browser JavaScript and has no
+static page-image fallback. Check each source highlight and crop in the
+intended preview host before delivery.
+
+`pdfx build work/ --viewer pdfjs` on a PDFium-initialized directory changes
+only the viewer. It retains low-resolution page previews and static crop
+images, and still needs PDFium/Pillow to generate the HTML.

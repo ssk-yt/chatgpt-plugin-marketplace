@@ -4,7 +4,7 @@ Coordinates are returned as (x%, y%, w%, h%) of the page, origin top-left,
 so the HTML can position highlights over a scaled page image.
 """
 from __future__ import annotations
-import difflib, re
+import difflib, hashlib, re
 from pathlib import Path
 
 from .extract import load_meta
@@ -13,11 +13,18 @@ from .sources import load_index
 
 class Doc:
     def __init__(self, workdir: str):
-        import pypdfium2 as pdfium
-
         self.workdir = Path(workdir)
         self.meta = load_meta(workdir)
-        self.pdf = pdfium.PdfDocument(self.meta["pdf"])
+        self.backend = self.meta.get("backend", "pdfium")
+        if self.backend == "pdfjs":
+            source = Path(self.meta["pdf"])
+            actual_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+            if actual_hash != self.meta.get("pdf_sha256"):
+                raise SystemExit("the PDF changed after pdfx init; rerun init")
+            self.pdf = None
+        else:
+            import pypdfium2 as pdfium
+            self.pdf = pdfium.PdfDocument(self.meta["pdf"])
         self.n_pages = self.meta["pages"]
         self.sizes = self.meta["sizes"]
         self.source_index = load_index(workdir)
@@ -34,6 +41,10 @@ class Doc:
         PDFium normalises whitespace, so a phrase that straddles a line break
         in the source is matched with a plain space.
         """
+        if self.backend == "pdfjs":
+            hits = [unit.get("rects", []) for unit in self.source_index["units"]
+                    if unit["page"] == page0 and phrase.casefold() in unit["text"].casefold()]
+            return (hits[occ] if occ < len(hits) else None), len(hits)
         page = self.pdf[page0]
         w, h = self.sizes[page0]
         tp = page.get_textpage()
@@ -75,6 +86,8 @@ class Doc:
         unit = self.source_units.get(source_id)
         if unit is None:
             return None, f"unknown source ID {source_id!r}; rerun pdfx text and use a listed ID"
+        if self.backend == "pdfjs":
+            return unit.get("rects", []), None
         page0 = unit["page"]
         page = self.pdf[page0]
         width, height = self.sizes[page0]
@@ -104,6 +117,15 @@ class Doc:
         """
         if not rects:
             return ""
+        if self.backend == "pdfjs":
+            def overlaps(one, two):
+                return (one[0] < two[0] + two[2] and two[0] < one[0] + one[2]
+                        and one[1] < two[1] + two[3] and two[1] < one[1] + one[3])
+            return " ".join(unit["text"] for unit in self.source_index["units"]
+                            if unit["page"] == page0 and any(
+                                overlaps(source_rect, highlight)
+                                for source_rect in unit.get("rects", [])
+                                for highlight in rects))
         page = self.pdf[page0]
         w, h = self.sizes[page0]
         tp = page.get_textpage()

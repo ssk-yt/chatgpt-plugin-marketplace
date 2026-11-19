@@ -5,13 +5,12 @@ rendered PDF on the right, and clicking any phrase in the prose highlights the
 exact source text it came from — using the PDF's real text-layer coordinates,
 not an estimate.
 
-    <PY> -m pip install pypdfium2 pillow   # Apache-2.0/BSD; avoid AGPL PyMuPDF
-
-    pdfx init paper.pdf -o work/      # extract text, cache page images
+    pdfx init paper.pdf -o work/      # PDF.js text and coordinates; Node.js only
+    pdfx init paper.pdf -o work-pdfium/ --backend pdfium  # optional raster fallback
     pdfx text work/                   # read all indexed source units
     pdfx build work/                  # content.md -> work/out/explainer.html
-    pdfx build work/ --viewer pdfjs   # experimental: render embedded PDF in-browser
-    pdfx verify work/                 # coverage heuristics + contact sheets
+    pdfx build work/ --viewer pdfjs   # test PDF.js viewer with PDFium extraction
+    pdfx verify work/                 # coverage checks; PDFium adds contact sheets
     pdfx find work/ "some phrase"     # probe one phrase, with near-miss hints
 
 `<PY>` is `python3` on macOS and Linux, `python` or `py -3` on Windows. There is
@@ -28,7 +27,8 @@ needs no `PYTHONPATH` and works the same in bash, zsh, PowerShell, and cmd:
 |---------------|----------------|
 | `run_pdfx.py` | cross-platform entry point; sets `sys.path`, then calls `cli.main` |
 | `cli.py`      | argparse subcommands, diagnostics formatting, UTF-8 output |
-| `extract.py`  | PDF → `text/pNN.txt`, `pages/pNN.png`, `pdfx.json` |
+| `extract.py`  | PDF.js or PDFium extraction → `text/pNN.txt`, `pdfx.json` |
+| `assets/pdfjs-extract.mjs` | PDF.js text units and coordinates in Node.js |
 | `anchors.py`  | phrase → page rects; `suggest()` for near-misses; `highlighted_text()` |
 | `parse.py`    | `content.md` → blocks + spans (`{{p3\|phrase\|表示}}`) |
 | `mathml.py`   | inline/block TeX-like notation → semantic MathML |
@@ -82,15 +82,19 @@ contain a source anchor.
 crops. Inspect every tile and tighten `@crop` coordinates until only the media
 and caption remain. Nearly full-page crops are rejected.
 
-The experimental `--viewer pdfjs` mode embeds the original PDF and pinned
-PDF.js modules instead of full-resolution page images. It renders pages on
-demand in the browser; small page previews remain visible if scripts are
-blocked. Figure/table crops are still embedded as separate images. This mode
-uses `DecompressionStream` and blob module URLs, so test it in the intended
-preview host before delivery. Extraction and crop preparation still use
-`pypdfium2` and Pillow; this flag does not yet make cloud generation independent
-of those packages. Use the default raster viewer when preview support is
-uncertain.
+The PDF.js backend (`init`, followed by `build`)
+extracts text and coordinates with the bundled PDF.js runtime under Node.js
+(20.16+ or 22.3+).
+It does not require `pypdfium2`, Pillow, or a package download. The HTML
+embeds the original PDF and PDF.js modules, then renders pages and figure/table
+crops in the browser. This full route needs browser JavaScript, `DecompressionStream`,
+and blob module URLs. `verify` checks text/link coverage but cannot make image
+contact sheets; inspect the generated crops in the HTML preview.
+
+The separate `build --viewer pdfjs` option on a PDFium-initialized directory
+changes only the viewer. It retains small static page previews and embedded
+figure/table crops, so it still needs the Python packages during generation.
+Use the PDFium raster fallback when the preview host cannot run PDF.js.
 
 At mobile widths, the explanation and PDF panes form a native horizontal
 scroll-snap carousel. Swiping, selecting a tab, or following a bidirectional
@@ -113,6 +117,5 @@ content clears the selection. Bidirectional navigation remains unchanged.
 * **Different anchor syntax** — `parse.SPAN_RE` is the single source of truth.
 * **Other verification rules** — add a function in `verify.py` returning rows
   with `id`/`flag`/`ratio` and wire it into `cli.cmd_verify`.
-* **Non-PDF sources** — `extract.py` and `anchors.Doc` are the only pdfium
-  users; swapping in another backend means implementing `text()`, `search()`
-  and `highlighted_text()`.
+* **Non-PDF sources** — add an extractor and corresponding `anchors.Doc`
+  resolver for source IDs and highlight coverage.

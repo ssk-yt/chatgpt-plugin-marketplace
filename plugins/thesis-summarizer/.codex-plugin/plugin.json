@@ -1,6 +1,6 @@
 {
   "name": "thesis-summarizer",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "Turn theses and research papers into self-contained, bidirectionally linked explainers.",
   "author": {
     "name": "Local developer"

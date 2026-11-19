@@ -4,8 +4,6 @@ import base64, html, json, re
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image
-
 from .extract import load_meta
 
 ASSETS = Path(__file__).parent / "assets"
@@ -57,6 +55,7 @@ def _embedded_pdfjs_assets(pdf_path: Path) -> str:
 
 def _page_image(path: Path) -> tuple[str, int, int]:
     """Keep the smaller of the source PNG and a high-quality WebP copy."""
+    from PIL import Image
     png = path.read_bytes()
     with Image.open(path) as source:
         width, height = source.size
@@ -75,6 +74,7 @@ def _page_image(path: Path) -> tuple[str, int, int]:
 
 def _fallback_page_image(path: Path) -> str:
     """Small page preview for hosts that do not run the PDF.js module."""
+    from PIL import Image
     with Image.open(path) as source:
         source = source.convert("RGB")
         source.thumbnail((612, 792), Image.Resampling.LANCZOS)
@@ -90,6 +90,7 @@ def _fallback_page_image(path: Path) -> str:
 
 
 def _crop_geometry(workdir: Path, item) -> tuple[int, int, int, int, int, int]:
+    from PIL import Image
     path = workdir / "pages" / f"p{item.page + 1:02d}.png"
     if not path.exists():
         raise SystemExit(f"content.md:{item.line}: rendered page image is missing: {path.name}")
@@ -104,6 +105,7 @@ def _crop_geometry(workdir: Path, item) -> tuple[int, int, int, int, int, int]:
 
 
 def _crop_image(workdir: Path, item) -> str:
+    from PIL import Image
     path = workdir / "pages" / f"p{item.page + 1:02d}.png"
     left, top, width, height, _, _ = _crop_geometry(workdir, item)
     with Image.open(path) as page:
@@ -125,22 +127,35 @@ def _crop_image(workdir: Path, item) -> str:
 def _media_html(block, workdir: Path, viewer: str = "raster") -> str:
     cards = []
     card_kind = "table" if block.title in {"table", "compare"} else "figure"
+    meta = load_meta(str(workdir)) if viewer == "pdfjs" else None
     for item in block.media:
         first = item.spans[0]
         plain_caption = " ".join(span.text for span in item.spans).strip()
-        left, top, width, height, page_width, page_height = _crop_geometry(workdir, item)
-        size_x, size_y = page_width / width * 100, page_height / height * 100
-        pos_x = left / (page_width - width) * 100 if page_width > width else 0
-        pos_y = top / (page_height - height) * 100 if page_height > height else 0
-        crop_style = (f'aspect-ratio:{width}/{height};background-size:{size_x:.8g}% '
-                      f'{size_y:.8g}%;background-position:{pos_x:.8g}% {pos_y:.8g}%')
-        if viewer == "pdfjs":
+        if meta and meta.get("backend") == "pdfjs":
+            page_width, page_height = meta["sizes"][item.page]
+            x, y, crop_width, crop_height = item.crop
+            width = max(1, round(page_width * crop_width / 100))
+            height = max(1, round(page_height * crop_height / 100))
+            crop_markup = (
+                f'<canvas class="media-crop pdfjs-crop" data-page="{item.page}" '
+                f'data-crop="{x},{y},{crop_width},{crop_height}" '
+                f'role="img" aria-label="{html.escape(plain_caption, quote=True)}" '
+                f'width="{width}" height="{height}"></canvas>'
+            )
+        elif viewer == "pdfjs":
+            left, top, width, height, _, _ = _crop_geometry(workdir, item)
             crop_markup = (
                 f'<img class="media-crop" src="{_crop_image(workdir, item)}" '
                 f'alt="{html.escape(plain_caption, quote=True)}" '
                 f'width="{width}" height="{height}">'
             )
         else:
+            left, top, width, height, page_width, page_height = _crop_geometry(workdir, item)
+            size_x, size_y = page_width / width * 100, page_height / height * 100
+            pos_x = left / (page_width - width) * 100 if page_width > width else 0
+            pos_y = top / (page_height - height) * 100 if page_height > height else 0
+            crop_style = (f'aspect-ratio:{width}/{height};background-size:{size_x:.8g}% '
+                          f'{size_y:.8g}%;background-position:{pos_x:.8g}% {pos_y:.8g}%')
             crop_markup = (
                 f'<div class="media-crop page-image-{item.page}" role="img" '
                 f'aria-label="{html.escape(plain_caption, quote=True)}" '
@@ -216,10 +231,16 @@ def write(workdir: str, blocks, anchors: list[dict], *, title: str | None = None
                        f'aria-label="原文PDF {i+1}ページ" style="aspect-ratio:{width}/{height}"></div>')
         else:
             width, height = meta["sizes"][i]
-            preview = _fallback_page_image(imgs[i])
-            page_css.append(f'.page-preview-{i}{{background-image:url("{preview}")}}')
-            surface = (f'<div class="page-surface pdfjs-surface page-preview-{i}" role="img" '
-                       f'aria-label="原文PDF {i+1}ページ" style="aspect-ratio:{width}/{height}"></div>')
+            preview_class = ""
+            loading_text = '<span class="pdfjs-loading">PDF.jsで原文を表示しています</span>'
+            if meta.get("backend") != "pdfjs":
+                preview = _fallback_page_image(imgs[i])
+                page_css.append(f'.page-preview-{i}{{background-image:url("{preview}")}}')
+                preview_class = f" page-preview-{i}"
+                loading_text = ""
+            surface = (f'<div class="page-surface pdfjs-surface{preview_class}" role="img" '
+                       f'aria-label="原文PDF {i+1}ページ" style="aspect-ratio:{width}/{height}">'
+                       f'{loading_text}</div>')
         overlays = "".join(overlays_by_page.get(i, []))
         parts.append(f'  <div class="pdfpage" data-page="{i}"><div class="pnum">p.{i+1}</div>'
                      f'{surface}'

@@ -1,5 +1,6 @@
 import os
 import json
+import hashlib
 import subprocess
 import sys
 import unittest
@@ -9,6 +10,7 @@ from tempfile import TemporaryDirectory
 from PIL import Image
 
 from pdfx import __version__
+from pdfx.anchors import Doc
 from pdfx.mathml import MathSyntaxError, output_math_residue, render_inline_math, render_math
 from pdfx.parse import ParseError, parse
 from pdfx.render import ASSETS, body_html, write
@@ -157,6 +159,43 @@ class LatexCopyTests(unittest.TestCase):
 
 
 class MediaTests(unittest.TestCase):
+    def test_pdfjs_backend_resolves_rectangles_without_cached_page_images(self):
+        blocks, spans = parse(
+            "{{s1.1|リンク付き本文}}。\n\n"
+            ":::media figure\n"
+            "@crop p1 10 10 60 60\n"
+            "{{s1.2|図1　説明}}\n"
+            ":::"
+        )
+        with TemporaryDirectory() as directory:
+            wd = Path(directory)
+            (wd / "text").mkdir()
+            (wd / "out").mkdir()
+            pdf = wd / "source.pdf"
+            pdf.write_bytes(b"%PDF-1.4\nmock test PDF")
+            meta = {"pdf": str(pdf), "backend": "pdfjs", "pages": 1,
+                    "sizes": [[612, 792]],
+                    "pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest()}
+            (wd / "pdfx.json").write_text(json.dumps(meta))
+            units = [
+                {"id": "s1.1", "page": 0, "text": "source statement",
+                 "rects": [[10, 10, 20, 3]]},
+                {"id": "s1.2", "page": 0, "text": "Figure 1. Caption.",
+                 "rects": [[10, 40, 20, 3]]},
+            ]
+            (wd / "sources.json").write_text(json.dumps({"version": 2, "units": units}))
+            doc = Doc(directory)
+            anchors = []
+            for span in spans:
+                rects, error = doc.resolve_source_id(span.source_id)
+                self.assertIsNone(error)
+                anchors.append({"id": span.id, "page": span.page, "rects": rects})
+            rendered = write(directory, blocks, anchors, viewer="pdfjs").read_text()
+        self.assertEqual(rendered.count('class="page-surface pdfjs-surface"'), 1)
+        self.assertEqual(rendered.count('class="media-crop pdfjs-crop"'), 1)
+        self.assertEqual(rendered.count('class="hl"'), 2)
+        self.assertNotIn('data:image/', rendered)
+
     def test_pdfjs_viewer_embeds_pdf_once_and_keeps_links(self):
         blocks, spans = parse(
             "{{s1.1|リンク付き本文}}。\n\n"

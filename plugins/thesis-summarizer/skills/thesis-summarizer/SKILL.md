@@ -44,14 +44,20 @@ That launcher needs no `PYTHONPATH` and no working directory of its own, so one
 spelling works in bash, zsh, PowerShell, and cmd. Do not compose shell-specific
 environment prefixes; they differ between POSIX shells and PowerShell.
 
-`pdfx` needs `pypdfium2` and Pillow. If either is missing:
+The default PDF.js backend needs Node.js and the bundled PDF.js files; it does
+not install Python PDF packages. Check the generated HTML in the intended
+preview host because PDF.js renders pages and figure crops in browser
+JavaScript. If the host cannot run it, `--backend pdfium` is the fallback.
+
+The PDFium fallback needs `pypdfium2` and Pillow. If either package is missing:
 
 - **In a hosted sandbox** (claude.ai or Claude Desktop chat), the container is
   disposable and yours alone, so install them directly:
   `<PY> -m pip install pypdfium2 pillow`. If that fails because the sandbox has
   no network, stop and tell the user that this skill needs package installs
   enabled; network access is off by default on Team and Enterprise plans and an
-  organization owner has to turn it on. Do not try to reimplement PDF parsing.
+  organization owner has to turn it on. The PDF.js backend above is the
+  package-free alternative when Node.js is available.
 - **On the user's own machine** (Claude Code), install for the current user with
   `<PY> -m pip install --user pypdfium2 pillow`, or into a task-local directory
   that you add to `PYTHONPATH`. Ask for network permission when required; do not
@@ -72,6 +78,10 @@ does not establish that the attachment is unavailable.
 pdfx init paper.pdf -o work/
 pdfx text work/
 ```
+
+PDF.js is the default. For a PDFium comparison, run
+`pdfx init paper.pdf -o work-pdfium/ --backend pdfium` instead. Do not mix
+source IDs between work directories initialized by different backends.
 
 Read every page. `pdfx text` prints the complete text layer as short,
 coordinate-addressable units such as `[s3.12]`. Preserve whole-paper coverage;
@@ -130,12 +140,14 @@ warnings are prompts for judgment, not requirements to rewrite sound prose.
 pdfx build work/
 ```
 
-When explicitly testing the PDF.js viewer, use `pdfx build work/ --viewer pdfjs`
-and check the preview host as described in [references/viewer.md](references/viewer.md).
-The default raster viewer remains the delivery path until that check passes.
+For a PDF.js-initialized work directory, `pdfx build work/` automatically uses
+the PDF.js viewer. An existing PDFium-initialized directory can test only the
+viewer with `pdfx build work/ --viewer pdfjs`. Check source links and crops in
+the preview host as described in [references/viewer.md](references/viewer.md).
 
-Source IDs resolve directly from saved PDF character ranges, without phrase
-search. Fix every reported `SOURCE` or `UNLINKED` error. If legacy phrase links
+Source IDs resolve directly from saved PDF character ranges (PDFium) or
+PDF.js text-item rectangles, without phrase search. Fix every reported
+`SOURCE` or `UNLINKED` error. If legacy phrase links
 or extraction problems require diagnosis, read
 [references/troubleshooting.md](references/troubleshooting.md). Never ship with
 `--allow-missing`.
