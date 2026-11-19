@@ -168,9 +168,10 @@ diagnostic as a blocking error.
 
 ### 7. Deliver
 
-Deliver `work/out/explainer.html` under a descriptive filename. It is
-self-contained and includes the PDF pages. Do not publish a copyrighted PDF to
-a hosted URL. For mobile/remote delivery and final output checks, read
-[references/delivery.md](references/delivery.md). Preserve the bundled viewer
-unless the user asks to change its design. When modifying viewer behavior, first read
-[references/viewer.md](references/viewer.md).
+Deliver `work/out/explainer.html` under a descriptive filename as an actual
+file attachment in the final response. Do not finish with only a local path or
+`file://` link. It is self-contained and includes the PDF pages. Do not publish
+a copyrighted PDF to a hosted URL. For mobile/remote delivery and final output
+checks, read [references/delivery.md](references/delivery.md). Preserve the
+bundled viewer unless the user asks to change its design. When modifying viewer
+behavior, first read [references/viewer.md](references/viewer.md).

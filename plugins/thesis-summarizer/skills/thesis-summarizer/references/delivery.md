@@ -2,10 +2,13 @@
 
 ## Mobile and remote sessions
 
-Attach the self-contained `.html` artifact to the response. A local filesystem
-path or `file://` URL from the execution environment is not usable on another
-device. Do not publicly host the artifact when it embeds a copyrighted or
-private source PDF.
+Attach the self-contained `.html` artifact as a file in the final response,
+then confirm that the attachment opens when the available tools allow it. A
+local filesystem path or `file://` URL alone is not delivery: it is not usable
+on another device and does not establish that the file was saved to ChatGPT
+Library. If attachment or opening cannot be verified, state that explicitly
+instead of claiming Library delivery. Do not publicly host the artifact when
+it embeds a copyrighted or private source PDF.
 
 ## Final integrity check
 
