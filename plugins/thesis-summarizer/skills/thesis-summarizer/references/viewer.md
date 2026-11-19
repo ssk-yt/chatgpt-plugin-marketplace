@@ -16,3 +16,11 @@ navigation survives previews that disable JavaScript. JavaScript may enhance
 scrolling, zoom, and swipe behavior but must not be the only navigation path.
 Page images and figure/table crops share one embedded image per page through
 CSS; keep crops visible when JavaScript is disabled.
+
+`pdfx build work/ --viewer pdfjs` is an opt-in experiment. It embeds PDF.js
+5.4.54 and the original PDF, draws full-resolution pages on demand, and keeps
+low-resolution page previews for hosts that block modules. Figure/table crops
+remain ordinary embedded images. Source links and highlight geometry are the
+same as in the raster viewer. The generator still uses PDFium/Pillow; compare
+link positions and crop display in the intended preview host before using this
+mode for delivery.

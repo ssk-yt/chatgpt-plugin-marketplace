@@ -10,6 +10,7 @@ not an estimate.
     pdfx init paper.pdf -o work/      # extract text, cache page images
     pdfx text work/                   # read all indexed source units
     pdfx build work/                  # content.md -> work/out/explainer.html
+    pdfx build work/ --viewer pdfjs   # experimental: render embedded PDF in-browser
     pdfx verify work/                 # coverage heuristics + contact sheets
     pdfx find work/ "some phrase"     # probe one phrase, with near-miss hints
 
@@ -80,6 +81,16 @@ contain a source anchor.
 `pdfx verify` writes `out/media_crops.png`, a contact sheet of all authored
 crops. Inspect every tile and tighten `@crop` coordinates until only the media
 and caption remain. Nearly full-page crops are rejected.
+
+The experimental `--viewer pdfjs` mode embeds the original PDF and pinned
+PDF.js modules instead of full-resolution page images. It renders pages on
+demand in the browser; small page previews remain visible if scripts are
+blocked. Figure/table crops are still embedded as separate images. This mode
+uses `DecompressionStream` and blob module URLs, so test it in the intended
+preview host before delivery. Extraction and crop preparation still use
+`pypdfium2` and Pillow; this flag does not yet make cloud generation independent
+of those packages. Use the default raster viewer when preview support is
+uncertain.
 
 At mobile widths, the explanation and PDF panes form a native horizontal
 scroll-snap carousel. Swiping, selecting a tab, or following a bidirectional

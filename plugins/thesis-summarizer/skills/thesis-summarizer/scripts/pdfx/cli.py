@@ -177,7 +177,7 @@ def cmd_build(a):
         pages_used = {sp.page for sp in spans}
         pages_used.update(item.page for block in blocks for item in block.media)
     out = render.write(a.workdir, blocks, anchors, title=a.title,
-                       pages_used=pages_used)
+                       pages_used=pages_used, viewer=a.viewer)
     (wd / "out" / "anchors.json").write_text(
         json.dumps([{**an, "text": sp.text, "source_id": sp.source_id,
                      "phrases": sp.phrases, "line": sp.line}
@@ -272,6 +272,8 @@ def main(argv=None):
     q.add_argument("--allow-missing", action="store_true")
     q.add_argument("--only-used-pages", action="store_true",
                    help="embed only pages an anchor points at (smaller file)")
+    q.add_argument("--viewer", choices=("raster", "pdfjs"), default="raster",
+                   help="PDF display backend (pdfjs is experimental)")
     q.set_defaults(fn=cmd_build)
 
     q = sub.add_parser("verify", help="coverage heuristics + contact sheets")

@@ -130,6 +130,10 @@ warnings are prompts for judgment, not requirements to rewrite sound prose.
 pdfx build work/
 ```
 
+When explicitly testing the PDF.js viewer, use `pdfx build work/ --viewer pdfjs`
+and check the preview host as described in [references/viewer.md](references/viewer.md).
+The default raster viewer remains the delivery path until that check passes.
+
 Source IDs resolve directly from saved PDF character ranges, without phrase
 search. Fix every reported `SOURCE` or `UNLINKED` error. If legacy phrase links
 or extraction problems require diagnosis, read

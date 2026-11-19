@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import sys
 import unittest
@@ -156,6 +157,38 @@ class LatexCopyTests(unittest.TestCase):
 
 
 class MediaTests(unittest.TestCase):
+    def test_pdfjs_viewer_embeds_pdf_once_and_keeps_links(self):
+        blocks, spans = parse(
+            "{{s1.1|リンク付き本文}}。\n\n"
+            ":::media figure\n"
+            "@crop p1 10 10 60 60\n"
+            "{{s1.2|図1　説明}}\n"
+            ":::"
+        )
+        with TemporaryDirectory() as directory:
+            wd = Path(directory)
+            (wd / "pages").mkdir()
+            (wd / "out").mkdir()
+            pdf = wd / "source.pdf"
+            pdf.write_bytes(b"%PDF-1.4\nmock test PDF")
+            (wd / "pdfx.json").write_text(json.dumps({
+                "pdf": str(pdf), "pages": 1, "sizes": [[612, 792]],
+            }))
+            Image.new("RGB", (100, 100), "white").save(wd / "pages" / "p01.png")
+            anchors = [
+                {"id": spans[0].id, "page": 0, "rects": [[10, 10, 20, 3]]},
+                {"id": spans[1].id, "page": 0, "rects": [[10, 40, 20, 3]]},
+            ]
+            rendered = write(directory, blocks, anchors, viewer="pdfjs").read_text()
+        self.assertEqual(rendered.count('id="pdf-source-data"'), 1)
+        self.assertEqual(rendered.count('id="pdfjs-main-gzip"'), 1)
+        self.assertEqual(rendered.count('id="pdfjs-worker-gzip"'), 1)
+        self.assertEqual(rendered.count('class="page-surface pdfjs-surface page-preview-0"'), 1)
+        self.assertEqual(rendered.count('class="media-crop"'), 1)
+        self.assertEqual(rendered.count('class="a"'), 2)
+        self.assertEqual(rendered.count('class="hl"'), 2)
+        self.assertEqual(rendered.count('data:image/'), 2)
+
     def test_figure_crop_and_linked_caption(self):
         blocks, spans = parse(
             ":::media figure\n"

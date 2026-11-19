@@ -61,6 +61,8 @@ math{font-family:"STIX Two Math","Cambria Math","Times New Roman",serif}
 .pdf-pages{width:100%;transform-origin:0 0}
 .pdfpage{position:relative;width:100%;margin:0 auto 14px;background:#fff;box-shadow:0 5px 18px rgba(40,34,24,.18)}
 .page-surface{display:block;width:100%;background-color:#fff;background-repeat:no-repeat;background-size:100% 100%;user-select:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.pdfjs-surface canvas{display:block;width:100%;height:100%}
+.pdfjs-error{margin:0;padding:12px;color:#8d342d;font-size:12px;text-align:left}
 .pdfpage .pnum{position:absolute;top:5px;left:5px;z-index:2;padding:1px 6px;border-radius:3px;background:rgba(0,0,0,.5);color:#fff;font:11px/1.5 "SFMono-Regular",Menlo,Consolas,monospace;pointer-events:none}
 .hl{position:absolute;z-index:3;margin:0;padding:0;border:0;border-radius:2px;background:rgba(var(--highlight-rgb),.08);color:transparent;cursor:pointer;box-shadow:none;transition:background-color .16s ease}
 .hl:hover,.hl.emphasis{background:rgba(var(--highlight-rgb),.32)}
